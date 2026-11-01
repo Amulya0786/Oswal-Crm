@@ -4,9 +4,12 @@ export const CATEGORIES = [
   "Openwell Pump",
   "Jet Pump",
   "Solar Pump",
+  "Motor",
   "Controller",
+  "RMS",
   "Solar Panel",
-  "Accessory",
+  "Rooftop System",
+  "Inverter",
 ];
 
 export const HSN = [
@@ -43,15 +46,14 @@ export const PRODUCTS: CatalogProduct[] = [
   { sku: "OSP-300O", name: "3 HP Openwell", type: "OPENWELL", category: "Openwell Pump", hp: "3 HP", head: "30 m", hsn: "84138190", company: "PUMPS" },
   { sku: "OSP-100J", name: "1 HP Jet Pump", type: "JET", category: "Jet Pump", hp: "1 HP", head: "50 m", hsn: "84138190", company: "PUMPS" },
   { sku: "OSP-150J", name: "1.5 HP Jet Pump", type: "JET", category: "Jet Pump", hp: "1.5 HP", head: "70 m", hsn: "84138190", company: "PUMPS" },
-  { sku: "OSS-SP3", name: "3 HP Solar Pump", type: "SOLAR", category: "Solar Pump", hp: "3 HP", head: "80 m", hsn: "84137010", company: "SOLAR" },
-  { sku: "OSS-SP5", name: "5 HP Solar Pump", type: "SOLAR", category: "Solar Pump", hp: "5 HP", head: "100 m", hsn: "84137010", company: "SOLAR" },
-  { sku: "OSS-SP75", name: "7.5 HP Solar Pump", type: "SOLAR", category: "Solar Pump", hp: "7.5 HP", head: "150 m", hsn: "84137010", company: "SOLAR" },
-  { sku: "OSS-CTL3", name: "3 HP Solar Controller", type: "CONTROLLER", category: "Controller", hp: "3 HP", hsn: "85044090", company: "SOLAR" },
-  { sku: "OSS-CTL5", name: "5 HP Solar Controller", type: "CONTROLLER", category: "Controller", hp: "5 HP", hsn: "85044090", company: "SOLAR" },
-  { sku: "OSS-P335", name: "335W Solar Panel", type: "PANEL", category: "Solar Panel", hsn: "85414011", company: "SOLAR" },
+  { sku: "OSP-SP5", name: "5 HP Solar Submersible", type: "SOLAR", category: "Solar Pump", hp: "5 HP", head: "100 m", hsn: "84137010", company: "PUMPS" },
+  { sku: "OSP-K5", name: "KUSUM 5 HP Surface Pump", type: "SOLAR", category: "Solar Pump", hp: "5 HP", head: "50 m", hsn: "84137010", company: "PUMPS" },
+  { sku: "OSP-CTL5", name: "5 HP Controller", type: "CONTROLLER", category: "Controller", hp: "5 HP", hsn: "85044090", company: "PUMPS" },
+  { sku: "OSP-MTR5", name: "5 HP Motor", type: "MOTOR", category: "Motor", hp: "5 HP", hsn: "85015290", company: "PUMPS" },
+  { sku: "OSP-RMS", name: "Pump RMS unit", type: "RMS", category: "RMS", hsn: "85176290", company: "PUMPS" },
   { sku: "OSS-P540", name: "540W Solar Panel", type: "PANEL", category: "Solar Panel", hsn: "85414011", company: "SOLAR" },
-  { sku: "OSS-K5", name: "KUSUM 5 HP Surface Pump", type: "SOLAR", category: "Solar Pump", hp: "5 HP", head: "50 m", hsn: "84137010", company: "SOLAR" },
-  { sku: "OSS-K75", name: "KUSUM 7.5 HP Submersible", type: "SOLAR", category: "Solar Pump", hp: "7.5 HP", head: "200 m", hsn: "84137010", company: "SOLAR" },
+  { sku: "OSS-RT5", name: "5 kW Rooftop System", type: "ROOFTOP", category: "Rooftop System", hsn: "85414011", company: "SOLAR" },
+  { sku: "OSS-INV5", name: "5 kW String Inverter", type: "INVERTER", category: "Inverter", hsn: "85044090", company: "SOLAR" },
 ];
 
 export const NATURES = [

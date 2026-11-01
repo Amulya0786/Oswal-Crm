@@ -102,7 +102,6 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     input.categoryId ? prisma.category.findUnique({ where: { id: input.categoryId } }) : null,
   ]);
   if (!state || !district) throw new HttpError(400, "State or district was not found");
-  if (product && product.companyId !== company.id) throw new HttpError(400, "That product belongs to the other company");
 
   const serial = resolveSerial({ serial: input.serialNo, unavailable: input.serialUnavailable, reason: input.serialUnavailableReason });
   if (!serial.ok) throw new HttpError(400, serial.reason);

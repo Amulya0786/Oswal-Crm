@@ -1,6 +1,6 @@
 # Oswal Service
 
-Service desk for Oswal Pumps Ltd and Oswal Solar Energy. One shared complaint number series, company switcher, and the October 2026 MIS checks built into booking and closure.
+Service desk for Oswal Pumps Ltd and Oswal Solar Energy. One shared complaint number series. Pump complaints, including PM-KUSUM, solar pumps, motors, controllers and RMS, are tagged Oswal Pumps. Oswal Solar is only panels, modules, rooftop systems and inverters. The booking form sets that company from the product category, and the agent can still change it.
 
 ## Setup
 

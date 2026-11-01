@@ -40,17 +40,33 @@ async function main() {
       { code: "431001", districtId: sambhajinagar.id },
     ],
   });
-  const sub = await prisma.category.create({ data: { name: "Solar Pump" } });
-  const hp = await prisma.hpCapacity.create({ data: { label: "5 HP" } });
-  const product = await prisma.product.create({
-    data: { companyId: solar.id, sku: "OSS-SP5", name: "5 HP Solar Submersible", type: "SOLAR", categoryId: sub.id, hpId: hp.id },
+  const pumpCategory = await prisma.category.create({ data: { name: "Solar Pump", companyCode: "PUMPS" } });
+  const panelCategory = await prisma.category.create({ data: { name: "Solar Panel", companyCode: "SOLAR" } });
+  await prisma.category.createMany({
+    data: [
+      { name: "Submersible Pump", companyCode: "PUMPS" },
+      { name: "Monoblock Pump", companyCode: "PUMPS" },
+      { name: "Controller", companyCode: "PUMPS" },
+      { name: "Motor", companyCode: "PUMPS" },
+      { name: "RMS", companyCode: "PUMPS" },
+      { name: "Rooftop System", companyCode: "SOLAR" },
+      { name: "Inverter", companyCode: "SOLAR" },
+    ],
   });
-  const brand = await prisma.brand.create({ data: { companyId: solar.id, name: "OSWAL" } });
+  const hp = await prisma.hpCapacity.create({ data: { label: "5 HP" } });
+  const pump = await prisma.product.create({
+    data: { companyId: pumps.id, sku: "OSP-SP5", name: "5 HP Solar Submersible", type: "SOLAR", categoryId: pumpCategory.id, hpId: hp.id },
+  });
+  const panel = await prisma.product.create({
+    data: { companyId: solar.id, sku: "OSS-P540", name: "540W Solar Panel", type: "PANEL", categoryId: panelCategory.id },
+  });
+  const brand = await prisma.brand.create({ data: { companyId: pumps.id, name: "OSWAL" } });
+  await prisma.brand.create({ data: { companyId: solar.id, name: "OSWAL" } });
   const nature = await prisma.complaintIssue.create({ data: { name: "Motor not working" } });
   await prisma.actualProblem.create({ data: { name: "Motor burnt" } });
   await prisma.actualSolution.create({ data: { name: "Motor replaced" } });
   const engineer = await prisma.engineer.create({
-    data: { id: "eng_anita", companyId: solar.id, name: "Anita Sharma", kind: "ENGINEER", employeeCode: "SOL-101", stateId: haryana.id, districtId: karnal.id, pincodes: "132001", skills: "SOLAR,INSTALLATION", phone: "9811100101" },
+    data: { id: "eng_anita", companyId: pumps.id, name: "Anita Sharma", kind: "ENGINEER", employeeCode: "PMP-101", stateId: haryana.id, districtId: karnal.id, pincodes: "132001", skills: "SOLAR,SUBMERSIBLE,INSTALLATION", phone: "9811100101" },
   });
   const passwordHash = await bcrypt.hash("Admin@123", 8);
   const admin = await prisma.user.create({
@@ -62,7 +78,7 @@ async function main() {
   await prisma.user.create({
     data: {
       name: "Dhananjay Test", email: "test.user@oswal.test", passwordHash: await bcrypt.hash("Test@123", 8), role: "CALL_CENTRE", isTest: true, phone: "8010460736",
-      memberships: { create: [{ companyId: solar.id }] },
+      memberships: { create: [{ companyId: pumps.id }] },
     },
   });
   const calls = [
@@ -75,7 +91,7 @@ async function main() {
     await prisma.complaint.create({
       data: {
         ticketNo,
-        companyId: solar.id,
+        companyId: pumps.id,
         bookDate: new Date(),
         customerName: row.name,
         phone: row.phone,
@@ -84,10 +100,10 @@ async function main() {
         stateName: row.state.name,
         districtName: row.district.name,
         callType: "BREAKDOWN",
-        categoryId: sub.id,
-        categoryName: sub.name,
-        productId: product.id,
-        productDetails: product.name,
+        categoryId: pumpCategory.id,
+        categoryName: pumpCategory.name,
+        productId: pump.id,
+        productDetails: pump.name,
         capacityLabel: "5 HP",
         serialNo: row.serial,
         serialNorm: row.serial,
@@ -112,6 +128,39 @@ async function main() {
       },
     });
   }
+  const solarBrand = await prisma.brand.findFirst({ where: { companyId: solar.id, name: "OSWAL" } });
+  const panelTicket = await nextTicketNo(new Date());
+  await prisma.complaint.create({
+    data: {
+      ticketNo: panelTicket,
+      companyId: solar.id,
+      bookDate: new Date(),
+      customerName: "Meera Joshi",
+      phone: "9811111003",
+      stateId: haryana.id,
+      districtId: karnal.id,
+      stateName: haryana.name,
+      districtName: karnal.name,
+      callType: "BREAKDOWN",
+      categoryId: panelCategory.id,
+      categoryName: panelCategory.name,
+      productId: panel.id,
+      productDetails: panel.name,
+      serialPending: true,
+      serialUnavailableReason: "STICKER_MISSING",
+      natureText: "Panel output low",
+      source: "CALL",
+      callBy: "Seed",
+      status: "OPEN",
+      finalStatus: "Open",
+      brandId: solarBrand?.id,
+      brandName: "OSWAL",
+      channel: "FIELD",
+      createdById: admin.id,
+      slaHours: 48,
+      slaDueAt: new Date(Date.now() + 48 * 3600 * 1000),
+    },
+  });
   console.log("Seeded demo desk. Admin admin@oswal.test / Admin@123");
 }
 

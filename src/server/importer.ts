@@ -8,6 +8,7 @@ import { parseCsv } from "@/lib/csv";
 import { suggestMapping, COMPLAINT_FIELDS, CUSTOMER_FIELDS, PRODUCT_FIELDS, USER_FIELDS } from "@/lib/import-map";
 import { normalizeCallType, normalizePriority, normalizeSource, normalizeStatus, labelOf, STATUSES, DEFAULT_SLA_HOURS } from "@/lib/labels";
 import { validateSerial } from "@/lib/quality";
+import { companyCodeForCategory } from "@/lib/company-tag";
 import { normalizePhone } from "@/lib/mask";
 import { parseLooseDate } from "@/lib/time";
 import type { SessionUser } from "@/lib/types";
@@ -91,6 +92,11 @@ export async function commitImport(user: SessionUser, input: { token: string; en
   throw new HttpError(400, "Choose complaints, customers, products or users");
 }
 
+async function companyForProductText(text: string) {
+  const code = companyCodeForCategory(text);
+  return prisma.company.findUnique({ where: { code } });
+}
+
 async function companyByCode(code?: string | null, fallback?: string) {
   if (fallback) return prisma.company.findUnique({ where: { id: fallback } });
   const wanted = (code ?? "").toUpperCase();
@@ -110,7 +116,8 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
   const errors: string[] = [];
   for (const [index, row] of rows.entries()) {
     try {
-      const company = await companyByCode(row.companyCode, companyId);
+      const company = await companyForProductText([row.categoryName, row.productDetails, row.schemeName].filter(Boolean).join(" "))
+        ?? await companyByCode(row.companyCode, companyId);
       if (!company) throw new Error("Company is missing");
       const phone = normalizePhone(row.phone);
       if (!row.customerName || phone.length < 8) throw new Error("Customer and mobile are required");
@@ -235,8 +242,9 @@ async function importProducts(rows: Record<string, string>[], companyId?: string
   const errors: string[] = [];
   for (const [index, row] of rows.entries()) {
     try {
-      const company = await companyByCode(row.companyCode, companyId);
       const name = row.productDetails || row.customerName;
+      const company = await companyForProductText([row.categoryName, name].filter(Boolean).join(" "))
+        ?? await companyByCode(row.companyCode, companyId);
       if (!company || !row.sku || !name) throw new Error("SKU, name and company are required");
       await prisma.product.upsert({
         where: { companyId_sku: { companyId: company.id, sku: row.sku } },

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Mark } from "@/components/shell";
+import { companyCodeForCategory } from "@/lib/company-tag";
+
+const PUBLIC_CATEGORIES = ["Solar Pump", "Submersible Pump", "Monoblock Pump", "Controller", "Motor", "RMS", "Solar Panel", "Rooftop System", "Inverter"];
 
 export default function PublicBookPage() {
   const [companies, setCompanies] = useState<{ id: string; shortName: string; legalName: string; accent: string; code: string }[]>([]);
@@ -25,7 +28,8 @@ export default function PublicBookPage() {
       <Mark />
       <p className="kicker" style={{ color: company?.accent }}>{company?.legalName ?? "Oswal"}</p>
       <h1 style={{ fontFamily: "var(--display)" }}>Book a complaint</h1>
-      <div className="chips">{companies.map((item) => <button key={item.id} className={`chip ${item.id === companyId ? "on" : ""}`} onClick={() => setCompanyId(item.id)}>{item.shortName}</button>)}</div>
+      <div className="chips">{companies.map((item) => <button type="button" key={item.id} className={`chip ${item.id === companyId ? "on" : ""}`} onClick={() => setCompanyId(item.id)}>{item.shortName}</button>)}</div>
+      <p className="muted">The company follows the product. You can change it.</p>
       <form className="stack" onSubmit={async (event) => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -47,6 +51,13 @@ export default function PublicBookPage() {
         </select>
         <input name="address" placeholder="Address" />
         <input name="pincode" placeholder="Pincode" required />
+        <select name="productCategory" defaultValue="Solar Pump" onChange={(event) => {
+          const code = companyCodeForCategory(event.target.value);
+          const next = companies.find((item) => item.code === code);
+          if (next) setCompanyId(next.id);
+        }}>
+          {PUBLIC_CATEGORIES.map((name) => <option key={name}>{name}</option>)}
+        </select>
         <select name="callType" defaultValue="BREAKDOWN"><option value="BREAKDOWN">Breakdown</option><option value="INSTALLATION">Installation</option><option value="SCHEME">Scheme / KUSUM</option><option value="INSURANCE">Insurance</option></select>
         <input name="natureText" placeholder="What is wrong?" required />
         <button className="btn">Submit</button>

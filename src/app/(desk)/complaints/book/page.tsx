@@ -11,8 +11,9 @@ export default async function BookPage() {
   if (!user.caps.book) redirect("/complaints");
   const companyIds = user.role === "ADMIN" ? undefined : user.companyIds;
   const companyFilter = companyIds ? { companyId: { in: companyIds } } : {};
-  const [companies, states, districts, areas, pincodes, products, engineers, brands, issues] = await Promise.all([
+  const [companies, categories, states, districts, areas, pincodes, products, engineers, brands, issues] = await Promise.all([
     prisma.company.findMany({ where: user.role === "ADMIN" ? { active: true } : { id: { in: user.companyIds } }, orderBy: { code: "asc" } }),
+    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, companyCode: true } }),
     prisma.state.findMany({ orderBy: { name: "asc" } }),
     prisma.district.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, stateId: true } }),
     prisma.area.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, districtId: true } }),
@@ -31,7 +32,7 @@ export default async function BookPage() {
           <p>Comp. No is assigned when you save. Look up the mobile or serial first.</p>
         </div>
       </div>
-      <BookForm options={{ companies, states, districts, areas, pincodes, products, engineers, brands, issues }} scope={scope} />
+      <BookForm options={{ companies, categories, states, districts, areas, pincodes, products, engineers, brands, issues }} scope={scope} />
     </div>
   );
 }

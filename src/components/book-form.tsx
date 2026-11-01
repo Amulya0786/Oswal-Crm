@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CALL_TYPES, PRIORITIES, SOURCES } from "@/lib/labels";
 import { SERIAL_UNAVAILABLE_REASONS } from "@/lib/quality";
 
-type Option = { id: string; name: string; stateId?: string; districtId?: string; companyId?: string; code?: string; type?: string; shortName?: string; accent?: string; legalName?: string };
+type Option = { id: string; name: string; stateId?: string; districtId?: string; companyId?: string; categoryId?: string | null; code?: string; companyCode?: string; type?: string; shortName?: string; accent?: string; legalName?: string };
 type Pin = { code: string; districtId: string; areaId: string | null };
 type Suggestion = { engineerId: string; name: string; score: number; reason: string; openCount: number };
 
@@ -17,6 +17,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
   const [districtId, setDistrictId] = useState("");
   const [areaId, setAreaId] = useState("");
   const [callType, setCallType] = useState("BREAKDOWN");
+  const [categoryId, setCategoryId] = useState("");
   const [productId, setProductId] = useState("");
   const [phone, setPhone] = useState("");
   const [serial, setSerial] = useState("");
@@ -35,7 +36,8 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
 
   const districts = (options.districts as Option[]).filter((row) => !stateId || row.stateId === stateId);
   const areas = (options.areas as Option[]).filter((row) => !districtId || row.districtId === districtId);
-  const products = (options.products as Option[]).filter((row) => row.companyId === companyId);
+  const categories = (options.categories ?? []) as Option[];
+  const products = (options.products as Option[]).filter((row) => !categoryId || row.categoryId === categoryId);
   const brands = (options.brands as Option[]).filter((row) => row.companyId === companyId);
 
   useEffect(() => {
@@ -76,6 +78,28 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
 
   const suggested = useMemo(() => suggestions.find((row) => row.engineerId === engineerId) ?? suggestions[0], [suggestions, engineerId]);
 
+  function companyIdForCategory(id: string) {
+    const category = categories.find((row) => row.id === id);
+    return companies.find((company) => company.code === category?.companyCode)?.id;
+  }
+
+  function chooseCategory(id: string) {
+    setCategoryId(id);
+    const nextCompany = companyIdForCategory(id);
+    if (nextCompany) setCompanyId(nextCompany);
+    const current = (options.products as Option[]).find((row) => row.id === productId);
+    if (current && current.categoryId !== id) setProductId("");
+  }
+
+  function chooseProduct(id: string) {
+    setProductId(id);
+    const product = (options.products as Option[]).find((row) => row.id === id);
+    if (!product?.categoryId) return;
+    setCategoryId(product.categoryId);
+    const nextCompany = companyIdForCategory(product.categoryId);
+    if (nextCompany) setCompanyId(nextCompany);
+  }
+
   async function scanSerial() {
     const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (source: CanvasImageSource) => Promise<{ rawValue?: string }[]> } }).BarcodeDetector;
     if (!Detector || !navigator.mediaDevices?.getUserMedia) {
@@ -112,6 +136,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
         districtId,
         areaId,
         callType,
+        categoryId: categoryId || null,
         productId: productId || null,
         engineerId: assignMode === "none" ? null : engineerId,
         assignMode,
@@ -145,6 +170,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <button type="button" key={company.id} className={`chip ${companyId === company.id ? "on" : ""}`} onClick={() => setCompanyId(company.id)}>{company.shortName}</button>
         ))}
       </div>
+      <p className="muted">Company follows the product category. Change it here if this call is an exception.</p>
       <section className="panel stack">
         <h2>Customer</h2>
         <div className="filters">
@@ -194,7 +220,11 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
         </div>
         <div className="filters">
           <select name="natureId" required defaultValue=""><option value="">Nature of complaint</option>{(options.issues as Option[]).map((issue) => <option key={issue.id} value={issue.id}>{issue.name}</option>)}</select>
-          <select value={productId} onChange={(event) => setProductId(event.target.value)}><option value="">Product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
+          <select value={categoryId} onChange={(event) => chooseCategory(event.target.value)}>
+            <option value="">Product category</option>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+          <select value={productId} onChange={(event) => chooseProduct(event.target.value)}><option value="">Product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
           <select name="brandId" defaultValue=""><option value="">OEM / brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select>
           <select name="priority" defaultValue="NORMAL">{PRIORITIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
           <select name="source" defaultValue="CALL">{SOURCES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
