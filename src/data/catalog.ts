@@ -128,8 +128,6 @@ export const CHECKLIST = [
   "Job card signed",
 ];
 
-export const EXPENSE_TYPES = ["Travel", "Local conveyance", "Lodging", "Spare parts", "Toll", "Other"];
-
 export const SOURCES = [
   ["CALL", "Call"],
   ["WHATSAPP", "WhatsApp"],

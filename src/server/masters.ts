@@ -55,7 +55,6 @@ export const MASTER_DEFS: MasterDef[] = [
     present: (row) => ({ Company: row.company?.shortName ?? "", Name: row.name, Type: row.kind, District: row.district?.name ?? "", Pincodes: row.pincodes }),
   },
   { key: "brands", title: "OEM / brand", group: "People", model: "brand", companyScoped: true, search: ["name"], orderBy: "name", include: { company: true }, fields: [select("companyId", "Company", "companies", true), text("name", "Brand", true)], present: (row) => ({ Company: row.company?.shortName ?? "", Brand: row.name }) },
-  { key: "expenses", title: "Expense types", group: "Complaint setup", model: "expenseType", search: ["name"], orderBy: "name", fields: [text("name", "Expense type", true)], present: (row) => ({ "Expense type": row.name }) },
   { key: "issues", title: "Complaint issue", group: "Complaint setup", model: "complaintIssue", search: ["name"], orderBy: "name", fields: [text("name", "Nature of complaint", true)], present: (row) => ({ Nature: row.name }) },
   { key: "sources", title: "Complaint source", group: "Complaint setup", model: "complaintSource", search: ["name", "code"], orderBy: "name", fields: [text("code", "Code", true), text("name", "Source", true)], present: (row) => ({ Code: row.code, Source: row.name }) },
   { key: "holds", title: "Complaint hold status", group: "Complaint setup", model: "holdStatus", search: ["name"], orderBy: "name", fields: [text("name", "Hold reason", true)], present: (row) => ({ "Hold reason": row.name }) },

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, Map as MapIcon, MessageCircle, PanelLeft, Phone, Search, Settings, Shield, Upload, Users, Wallet } from "lucide-react";
+import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, Map as MapIcon, MessageCircle, PanelLeft, Phone, Search, Settings, Shield, Upload, Users } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
@@ -15,7 +15,6 @@ const GROUPS = [
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/map", label: "Map", icon: MapIcon },
     { href: "/attendance", label: "Attendance", icon: Clock },
-    { href: "/expenses", label: "Expenses", icon: Wallet },
   ] },
   { label: "Masters", items: [{ href: "/masters", label: "Masters", icon: Library }] },
   { label: "Reports", items: [
@@ -38,7 +37,7 @@ const GROUPS = [
 
 const CRUMB: Record<string, string> = {
   complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
-  security: "Security", import: "Import", settings: "Settings", attendance: "Attendance", expenses: "Expenses",
+  security: "Security", import: "Import", settings: "Settings", attendance: "Attendance",
   exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", calls: "Calls", scorecards: "Scorecards", daily: "Daily summary", field: "Technician",
 };
 

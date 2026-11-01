@@ -342,11 +342,6 @@ model Brand {
   @@index([companyId])
 }
 
-model ExpenseType {
-  id   String @id @default(cuid())
-  name String @unique
-}
-
 model ComplaintIssue {
   id         String      @id @default(cuid())
   name       String      @unique
