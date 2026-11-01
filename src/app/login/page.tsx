@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BrandLogo } from "@/components/chrome";
 
-const showDemo = process.env.NEXT_PUBLIC_DEMO_HINTS !== "0";
+const showDemo = process.env.NEXT_PUBLIC_DEMO_HINTS === "1";
 const DEMOS = [["Admin", "admin@oswal.test", "Admin@123"]];
 
 export default function LoginPage() {
