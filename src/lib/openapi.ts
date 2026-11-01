@@ -3,7 +3,7 @@ export const openApi = {
   info: {
     title: "Oswal Service API",
     version: "1.0.0",
-    description: "REST API for the service desk, the future WhatsApp bot, the technician app and Business Central. Send header x-api-key.",
+    description: "REST API for the service desk and the technician app. Send header x-api-key.",
   },
   servers: [{ url: "/api/v1" }],
   components: {

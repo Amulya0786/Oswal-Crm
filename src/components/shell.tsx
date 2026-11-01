@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, Map as MapIcon, MessageCircle, PanelLeft, Phone, Search, Settings, Shield, Upload, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, Map as MapIcon, PanelLeft, Search, Settings, Shield, Upload, Users } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
+import { DESK_LABEL, type FieldLang } from "@/lib/i18n";
 import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
 
 const GROUPS = [
@@ -19,26 +20,21 @@ const GROUPS = [
   { label: "Masters", items: [{ href: "/masters", label: "Masters", icon: Library }] },
   { label: "Reports", items: [
     { href: "/reports", label: "Reports", icon: BarChart3 },
-    { href: "/reports/scorecards", label: "Scorecards", icon: BarChart3 },
+    { href: "/performance", label: "Technician score", icon: BarChart3 },
     { href: "/reports/daily", label: "Daily summary", icon: LineChart },
-    { href: "/assist", label: "Assist", icon: LineChart },
-    { href: "/performance", label: "Scores", icon: BarChart3 },
-    { href: "/feedback", label: "Feedback", icon: MessageCircle },
-    { href: "/analytics", label: "Analytics", icon: LineChart },
+    { href: "/assist", label: "Suggestions", icon: LineChart },
   ] },
   { label: "Admin", items: [
     { href: "/security", label: "Security", icon: Shield },
     { href: "/import", label: "Import", icon: Upload },
     { href: "/settings", label: "Settings", icon: Settings },
-    { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
-    { href: "/calls", label: "Calls", icon: Phone },
   ] },
 ];
 
 const CRUMB: Record<string, string> = {
   complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
   security: "Security", import: "Import", settings: "Settings", attendance: "Attendance",
-  exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", calls: "Calls", scorecards: "Scorecards", daily: "Daily summary", field: "Technician",
+  exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings",
 };
 
 export function Shell({ user, scope, version, children }: { user: SessionUser; scope: string; version: number; children: React.ReactNode }) {
@@ -55,11 +51,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   const groups = GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
-      if (item.href === "/security") return user.caps.security;
-      if (item.href === "/settings" || item.href === "/whatsapp") return user.caps.settings;
-      if (item.href === "/calls") return user.caps.assign || user.caps.settings;
-      if (item.href === "/import") return user.caps.import;
-      if (item.href === "/analytics" || item.href === "/reports") return user.caps.report || user.caps.analytics;
+      if (item.href === "/security" || item.href === "/import" || item.href === "/settings") return user.caps.security;
+      if (item.href === "/reports" || item.href === "/performance" || item.href === "/reports/daily") return user.caps.report || user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
       return true;
     }),
@@ -68,7 +61,10 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("oswal-sidebar") === "collapsed");
     const saved = window.localStorage.getItem("oswal-lang");
-    if (saved === "hi" || saved === "en") setLang(saved);
+    if (saved === "hi" || saved === "en") {
+      setLang(saved);
+      document.cookie = `oswal_lang=${saved}; path=/; max-age=31536000`;
+    }
   }, []);
 
   useEffect(() => {
@@ -138,6 +134,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             const next = lang === "hi" ? "en" : "hi";
             setLang(next);
             window.localStorage.setItem("oswal-lang", next);
+            document.cookie = `oswal_lang=${next}; path=/; max-age=31536000`;
             document.documentElement.lang = next;
           }}>{lang === "hi" ? "EN" : "हिंदी"}</button>
           <ThemeToggle />
@@ -146,9 +143,9 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#d5e7dc" }}>{ROLE_LABEL[user.role]}</div></summary>
             <div className="user-pop">
               <div style={{ padding: 8 }}>{user.email}</div>
-              <Link href="/exports">Exports</Link>
-              <Link href="/field">Technician app</Link>
-              <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}><LogOut size={14} /> Sign out</button>
+              <Link href="/exports">{DESK_LABEL[lang].Exports}</Link>
+              <Link href="/field">{DESK_LABEL[lang]["Technician app"]}</Link>
+              <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}><LogOut size={14} /> {DESK_LABEL[lang]["Sign out"]}</button>
             </div>
           </details>
         </div>
@@ -160,11 +157,16 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
           </Link>
           {groups.map((group) => (
             <div key={group.label}>
-              <div className="side-group">{group.label}</div>
+              <div className="side-group">{DESK_LABEL[lang][group.label] ?? group.label}</div>
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
-                return <Link key={item.href} href={item.href} className={`side-link ${active ? "active" : ""}`}><Icon size={16} /><span>{item.label}</span></Link>;
+                const active = item.href === "/"
+                  ? path === "/"
+                  : item.href === "/reports"
+                    ? path === "/reports" || (path.startsWith("/reports/") && !path.startsWith("/reports/daily"))
+                    : path.startsWith(item.href);
+                const label = DESK_LABEL[lang][item.label] ?? item.label;
+                return <Link key={item.href} href={item.href} className={`side-link ${active ? "active" : ""}`}><Icon size={16} /><span>{label}</span></Link>;
               })}
             </div>
           ))}
@@ -174,7 +176,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             {trail.map((item, index) => (
               <span key={item.href}>
                 {index > 0 && " / "}
-                {index === trail.length - 1 ? item.label : <Link href={item.href}>{item.label}</Link>}
+                {index === trail.length - 1 ? (DESK_LABEL[lang][item.label] ?? item.label) : <Link href={item.href}>{DESK_LABEL[lang][item.label] ?? item.label}</Link>}
               </span>
             ))}
           </nav>

@@ -1,6 +1,7 @@
 import { getScope } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { ACTIVE_STATUSES } from "@/lib/labels";
+import { dailyAiSummary } from "@/server/ai";
 
 export const metadata = { title: "Daily summary" };
 
@@ -15,6 +16,7 @@ export default async function DailySummaryPage() {
     prisma.complaint.count({ where: { ...company, excludeFromMis: false, slaBreached: true, status: { in: [...ACTIVE_STATUSES] } } }),
     prisma.complaint.count({ where: { ...company, excludeFromMis: false, repeatWindow: { not: null } } }),
   ]);
+  const note = await dailyAiSummary();
   const saved = await prisma.appSetting.findUnique({ where: { key: "lastSummary" } });
   const last = saved ? JSON.parse(saved.value) as { at?: string } : null;
   const rows = [
@@ -47,7 +49,9 @@ export default async function DailySummaryPage() {
         </div>
         <p>Top districts: none yet.</p>
         <p>Technicians: none yet.</p>
-        <p className="muted">Generate from Settings when you want the log, the PDF, and the manager message. Nothing is sent to a real inbox until SMTP or WhatsApp keys are set.</p>
+        <h2>Assistant note</h2>
+        <p>{note.text}</p>
+        <p className="muted">{note.mode === "mock" ? "This note is a local summary until an AI key is set. " : ""}Generate from Settings when you want the log, the PDF, and the manager message. Nothing is sent to a real inbox until SMTP or WhatsApp keys are set.</p>
       </section>
     </div>
   );

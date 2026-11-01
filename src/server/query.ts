@@ -292,7 +292,7 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
   const c = counts[0] ?? {};
   const num = (key: string) => Number(c[key] ?? 0);
   const tiles: Tile[] = [
-    { key: "active", group: "pipeline", tone: "navy", label: "Total pending", value: num("active"), hint: "Open, assigned and on hold", href: tileHref(drill, { statusGroup: "active" }) },
+    { key: "active", group: "pipeline", tone: "navy", label: "All live calls", value: num("active"), hint: "Open, assigned and on hold", href: tileHref(drill, { statusGroup: "active" }) },
     { key: "open", group: "pipeline", tone: "info", label: "Open", value: num("open"), hint: "Not yet assigned", href: tileHref(drill, { status: "OPEN" }) },
     { key: "assigned", group: "pipeline", tone: "copper", label: "Assigned", value: num("assigned"), hint: "With a technician", href: tileHref(drill, { status: "ASSIGNED" }) },
     { key: "pending", group: "pipeline", tone: "amber", label: "Pending", value: num("pending"), hint: "Held with a reason", href: tileHref(drill, { status: "PENDING" }) },
@@ -304,11 +304,11 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
     { key: "scheme", group: "type", tone: "amber", label: "Pending scheme", value: num("scheme"), hint: "MSEDCL and KUSUM", href: tileHref(drill, { statusGroup: "active", callType: "SCHEME" }) },
     { key: "logged_month", group: "month", tone: "navy", label: "Logged this month", value: num("logged_month"), hint: "Complaints booked", href: tileHref(drill, { booked: "month" }) },
     { key: "closed_month", group: "month", tone: "good", label: "Closed this month", value: num("closed_month"), hint: "Status closed", href: tileHref(drill, { closed: "month" }) },
-    { key: "happy_month", group: "month", tone: "teal", label: "Happy calling", value: num("happy_month"), hint: "Feedback captured", href: tileHref(drill, { happy: "month" }) },
+    { key: "happy_month", group: "month", tone: "teal", label: "Happy call this month", value: num("happy_month"), hint: "Phone feedback done", href: tileHref(drill, { happy: "month" }) },
     { key: "cancel_month", group: "month", tone: "stone", label: "Cancelled", value: num("cancel_month"), hint: "This month", href: tileHref(drill, { cancelled: "month" }) },
     { key: "logged_today", group: "today", tone: "navy", label: "Logged today", value: num("logged_today"), hint: "Since midnight IST", href: tileHref(drill, { booked: "today" }) },
     { key: "closed_today", group: "today", tone: "good", label: "Closed today", value: num("closed_today"), hint: "Closed since midnight", href: tileHref(drill, { closed: "today" }) },
-    { key: "happy_today", group: "today", tone: "teal", label: "Happy calling today", value: num("happy_today"), hint: "Feedback today", href: tileHref(drill, { happy: "today" }) },
+    { key: "happy_today", group: "today", tone: "teal", label: "Happy call", value: num("happy_today"), hint: "Phone feedback today", href: tileHref(drill, { happy: "today" }) },
     { key: "cancel_today", group: "today", tone: "stone", label: "Cancelled today", value: num("cancel_today"), hint: "Cancelled today", href: tileHref(drill, { cancelled: "today" }) },
     { key: "age_0_2", group: "age", tone: "good", label: "0–2 days", value: num("age_0_2"), hint: "Fresh complaints", href: tileHref(drill, { ageing: "0-2" }) },
     { key: "age_3_7", group: "age", tone: "info", label: "3–7 days", value: num("age_3_7"), hint: "Needs a push", href: tileHref(drill, { ageing: "3-7" }) },
@@ -316,8 +316,8 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
     { key: "age_15p", group: "age", tone: "bad", label: "Over 15 days", value: num("age_15p"), hint: "Older than 15 days", href: tileHref(drill, { ageing: "15p" }) },
     { key: "breach", group: "sla", tone: "bad", label: "SLA breached", value: num("breach"), hint: "Past the promise time", href: tileHref(drill, { breach: "1" }) },
     { key: "risk", group: "sla", tone: "amber", label: "At risk", value: num("risk"), hint: "Likely to breach", href: tileHref(drill, { risk: "1" }) },
-    { key: "feedback_score", group: "feedback", tone: "good", label: "Feedback score", value: num("feedback_score"), hint: "Average of 1 to 5", href: "/performance" },
-    { key: "feedback_pending", group: "feedback", tone: "amber", label: "Pending feedback", value: num("feedback_pending"), hint: "Waiting on WhatsApp or a call", href: "/feedback" },
+    { key: "feedback_score", group: "feedback", tone: "good", label: "WhatsApp rating", value: num("feedback_score"), hint: "Average of 1 to 5", href: "/feedback" },
+    { key: "feedback_pending", group: "feedback", tone: "amber", label: "Ratings waiting", value: num("feedback_pending"), hint: "Closed visits with no score yet", href: "/feedback" },
   ];
 
   const dim = dimension === "district" || dimension === "engineer" || dimension === "product" || dimension === "type" ? dimension : "state";

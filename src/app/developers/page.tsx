@@ -1,8 +1,11 @@
 import { openApi } from "@/lib/openapi";
+import { getScope } from "@/server/auth";
 
 export const metadata = { title: "API" };
 
-export default function DevelopersPage() {
+export default async function DevelopersPage() {
+  const { user } = await getScope();
+  if (!user?.caps.security) return <main className="main"><p>API notes are for admins.</p></main>;
   return (
     <main className="main">
       <p className="kicker">API</p>

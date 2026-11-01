@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ProofRules } from "@/components/proof-rules";
+import { WhatsAppTemplates } from "@/components/whatsapp-templates";
 
 export default function SettingsPage() {
   const [data, setData] = useState<any>(null);
   const [message, setMessage] = useState("");
+  const [tab, setTab] = useState<"desk" | "whatsapp" | "proof">("desk");
   async function load() {
     const response = await fetch("/api/desk/settings");
     if (response.ok) setData(await response.json());
   }
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const asked = new URLSearchParams(window.location.search).get("tab");
+    if (asked === "whatsapp" || asked === "proof" || asked === "desk") setTab(asked);
+  }, []);
   async function post(body: object) {
     const response = await fetch("/api/desk/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json();
@@ -19,8 +27,16 @@ export default function SettingsPage() {
   if (!data) return <p>Loading settings…</p>;
   return (
     <div>
-      <div className="page-head"><div><p className="kicker">Settings</p><h1>SLAs, rules and messages</h1></div></div>
+      <div className="page-head"><div><p className="kicker">Admin</p><h1>Settings</h1><p>SLAs, message wording, and what a technician must capture at close. <Link href="/developers">API notes</Link></p></div></div>
+      <div className="chips">
+        {([["desk", "Desk"], ["whatsapp", "WhatsApp"], ["proof", "Proof"]] as const).map(([id, label]) => (
+          <button key={id} type="button" className={`chip ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
       {message && <div className="banner">{message}</div>}
+      {tab === "whatsapp" && <WhatsAppTemplates />}
+      {tab === "proof" && <ProofRules />}
+      {tab === "desk" && <>
       <section className="panel">
         <h2>SLA hours</h2>
         {data.slas.map((row: any) => (
@@ -75,6 +91,7 @@ export default function SettingsPage() {
         <input name="secret" placeholder="Secret" />
         <button className="btn line">Add webhook</button>
       </form>
+      </>}
     </div>
   );
 }

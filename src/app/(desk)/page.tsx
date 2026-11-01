@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { getScope } from "@/server/auth";
 import { getDashboard } from "@/server/query";
+import { getAnalytics } from "@/server/analytics";
 import { filtersFromRecord } from "@/server/scope";
 import { formatNumber, formatWhen } from "@/lib/time";
 import { labelOf, CALL_TYPES, STATUSES, statusClass } from "@/lib/labels";
+import { DESK_LABEL, TILE_LABEL, type FieldLang } from "@/lib/i18n";
 import { EmptyState, TileGrid } from "@/components/chrome";
 
 export const metadata = { title: "Dashboard" };
@@ -11,6 +14,8 @@ export const metadata = { title: "Dashboard" };
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { user, scope } = await getScope();
   if (!user) return null;
+  const lang: FieldLang = (await cookies()).get("oswal_lang")?.value === "hi" ? "hi" : "en";
+  const t = (key: string) => DESK_LABEL[lang][key] ?? key;
   const sp = await searchParams;
   const filters = filtersFromRecord(sp);
   const dimension = typeof sp.dimension === "string" ? sp.dimension : "state";
@@ -18,13 +23,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const byKey = (key: string) => data.tiles.find((tile) => tile.key === key);
   const closedMonth = byKey("closed_month");
   const sections = [
-    { id: "today", title: "Today", tiles: data.tiles.filter((tile) => tile.group === "today") },
-    { id: "feedback", title: "Feedback", tiles: data.tiles.filter((tile) => tile.group === "feedback") },
-    { id: "pipeline", title: "Status pipeline", tiles: ["open", "assigned", "pending"].map((key) => byKey(key)).concat(closedMonth ? [{ ...closedMonth, label: "Closed", hint: "Closed this month" }] : []).concat(data.tiles.filter((tile) => tile.group === "pipeline" && !["open", "assigned", "pending"].includes(tile.key))).filter((tile): tile is NonNullable<typeof tile> => Boolean(tile)) },
-    { id: "sla", title: "SLA and ageing", tiles: data.tiles.filter((tile) => tile.group === "age" || tile.group === "sla") },
-    { id: "type", title: "By call type", tiles: data.tiles.filter((tile) => tile.group === "type") },
-    { id: "month", title: "This month", tiles: data.tiles.filter((tile) => tile.group === "month" && tile.key !== "closed_month") },
-  ];
+    { id: "today", title: t("Today"), tiles: data.tiles.filter((tile) => tile.group === "today") },
+    { id: "feedback", title: t("Ratings"), tiles: data.tiles.filter((tile) => tile.group === "feedback") },
+    { id: "pipeline", title: t("Status pipeline"), tiles: ["open", "assigned", "pending"].map((key) => byKey(key)).concat(closedMonth ? [{ ...closedMonth, label: TILE_LABEL[lang].closed_month ?? "Closed this month", hint: lang === "hi" ? "इस महीने बंद" : "Closed this month" }] : []).concat(data.tiles.filter((tile) => tile.group === "pipeline" && !["open", "assigned", "pending"].includes(tile.key))).filter((tile): tile is NonNullable<typeof tile> => Boolean(tile)) },
+    { id: "sla", title: t("SLA and ageing"), tiles: data.tiles.filter((tile) => tile.group === "age" || tile.group === "sla") },
+    { id: "type", title: t("By call type"), tiles: data.tiles.filter((tile) => tile.group === "type") },
+    { id: "month", title: t("This month"), tiles: data.tiles.filter((tile) => tile.group === "month" && tile.key !== "closed_month") },
+  ].map((section) => ({
+    ...section,
+    tiles: section.tiles.map((tile) => ({ ...tile, label: TILE_LABEL[lang][tile.key] ?? tile.label })),
+  }));
+  const movement = user.caps.analytics || user.caps.report ? await getAnalytics(user, scope) : null;
+  const hasMovement = Boolean(movement && (movement.leaders.length || movement.heat.length || movement.problems.length || movement.trend.some((row) => row.logged || row.closed)));
   const company = scope === "all" ? "Oswal group" : user.companies.find((item) => item.id === scope)?.legalName;
   const max = Math.max(...data.drill.rows.map((row) => row.value), 1);
   const trendMax = Math.max(...data.trend.flatMap((row) => [row.logged, row.closed]), 1);
@@ -36,7 +46,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <h1>Good day, {user.name.split(" ")[0]}</h1>
           <p>Every number opens the matching complaints. Counts stay on the server.</p>
         </div>
-        {user.caps.book && <Link className="btn" href="/complaints/book">Book a complaint</Link>}
+        {user.caps.book && <Link className="btn" href="/complaints/book">{t("Book a complaint")}</Link>}
       </div>
       <form className="filters" method="get">
         <select name="dimension" defaultValue={dimension}>
@@ -91,7 +101,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
       {scope === "all" && (
         <section>
-          <div className="section-label">Company split</div>
+          <div className="section-label">{t("Company split")}</div>
           <TileGrid tiles={data.companies.map((companyRow) => ({ key: companyRow.id, href: `/complaints?companyId=${companyRow.id}&statusGroup=active`, tone: companyRow.shortName.includes("Solar") ? "copper" : "navy", label: companyRow.shortName, value: companyRow.active, hint: "Live complaints" }))} />
         </section>
       )}
@@ -111,7 +121,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         </div>
       </section>
-      <p className="footer-note">Oswal Service · Phase 1 · counts refresh live without reloading the whole desk.</p>
+      <details className="panel" style={{ marginTop: 16 }}>
+        <summary>{lang === "hi" ? "गति — जिले, उत्पाद और तकनीशियन" : "Movement — districts, products and technicians"}</summary>
+        {!hasMovement && <p className="muted">Nothing to chart yet. This used to be a separate Analytics page.</p>}
+        {hasMovement && movement && (
+          <div className="grid-2" style={{ marginTop: 12 }}>
+            <div>
+              <h2>Technicians</h2>
+              {movement.leaders.map((row) => <p key={row.name}><b>{row.name}</b> · closed {row.closed} · live {row.live}</p>)}
+            </div>
+            <div>
+              <h2>Live by district</h2>
+              {movement.heat.map((row) => <p key={row.label}>{row.label}: {row.tickets}</p>)}
+              <h2>Top problems</h2>
+              {movement.problems.map((row) => <p key={row.label}>{row.label}: {row.tickets}</p>)}
+            </div>
+          </div>
+        )}
+      </details>
+      <p className="footer-note">Oswal Service · counts refresh live without reloading the whole desk.</p>
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function UserForm({ companies, states, districts, brands }: { companies: 
         <input name="email" type="email" placeholder="Email" required />
         <input name="password" placeholder="Password" required />
         <input name="phone" placeholder="Mobile" />
-        <select name="role">{ROLES.map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select>
+        <select name="role">{ROLES.filter((role) => role !== "DEALER").map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select>
       </div>
       <div className="filters">
         {companies.map((company) => <label key={company.id} className="chip"><input type="checkbox" name="companyIds" value={company.id} /> {company.shortName}</label>)}

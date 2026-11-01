@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const TABS = ["Booking", "Fix steps", "Daily note", "Ask"] as const;
+const TABS = ["Booking", "Fix steps", "Ask"] as const;
 
 export default function AssistPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Booking");
@@ -12,7 +12,7 @@ export default function AssistPage() {
 
   async function run() {
     setPending(true);
-    const kind = tab === "Booking" ? "book" : tab === "Fix steps" ? "fix" : tab === "Ask" ? "ask" : "daily";
+    const kind = tab === "Booking" ? "book" : tab === "Fix steps" ? "fix" : "ask";
     const response = await fetch("/api/desk/assist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -27,17 +27,17 @@ export default function AssistPage() {
     <div>
       <div className="page-head">
         <div>
-          <p className="kicker">Assist</p>
-          <h1>Desk assistant</h1>
-          <p>Suggestions stay on this page. Without an AI key the answers are a local mock, not a live model.</p>
+          <p className="kicker">Suggestions</p>
+          <h1>Suggestions</h1>
+          <p>Booking hints, likely fixes, and plain-language search. Without an AI key the answers are a local mock. The daily management note is on Daily summary.</p>
         </div>
       </div>
       <div className="chips">
         {TABS.map((item) => <button key={item} className={`chip ${tab === item ? "on" : ""}`} onClick={() => { setTab(item); setResult(""); }}>{item}</button>)}
       </div>
       <section className="panel stack">
-        {tab !== "Daily note" && <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={tab === "Booking" ? "Customer description, Hindi or English" : tab === "Fix steps" ? "Actual problem" : "Ask in plain language"} />}
-        <button className="btn" disabled={pending} onClick={() => void run()}>{pending ? "Working…" : tab === "Daily note" ? "Write today’s note" : "Ask"}</button>
+        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={tab === "Booking" ? "Customer description, Hindi or English" : tab === "Fix steps" ? "Actual problem" : "Ask in plain language"} />
+        <button className="btn" disabled={pending} onClick={() => void run()}>{pending ? "Working…" : "Ask"}</button>
         {result && <pre className="muted">{result}</pre>}
         {!result && <p className="muted">Nothing asked yet. Booking can suggest a category and a repeat. Fix steps use closed complaints. Ask can look for a district and an age.</p>}
       </section>

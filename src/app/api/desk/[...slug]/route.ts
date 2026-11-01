@@ -13,7 +13,6 @@ import { listComplaints } from "@/server/query";
 import { runEscalation, runSummary } from "@/server/jobs";
 import { classifyDuplicates } from "@/lib/duplicates";
 import { findCustomer, loadCustomerHistory, mergeCustomers } from "@/server/link";
-import { telephony } from "@/server/telephony";
 import { loadScorecards, scorecardPdf, scorecardWorkbook } from "@/server/scorecard";
 import { askTickets, bookingHint, dailyAiSummary, fixHints, summariseComplaint } from "@/server/ai";
 import { storeAudio, transcribe } from "@/server/speech";
@@ -165,13 +164,6 @@ async function route(method: string, slug: string[], req: Request) {
       return new Response(file, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": "attachment; filename=scorecards.xlsx" } });
     }
     return json(data);
-  }
-
-  if (head === "calls" && method === "POST") {
-    const body = await readJson(req);
-    const pop = await telephony().screenPop(String(body.phone ?? ""));
-    if (body.log !== false) await telephony().logCall({ phone: String(body.phone ?? ""), complaintId: pop.complaintId, note: body.note ? String(body.note) : "Screen pop" });
-    return json(pop);
   }
 
   if (method === "GET" && head === "search") {
@@ -330,6 +322,7 @@ async function route(method: string, slug: string[], req: Request) {
     if (method === "DELETE") return json(await deleteMaster(user, def, url.searchParams.get("id") || ""));
   }
 
+  if (head === "import" && method === "POST" && !user.caps.security) return json({ error: "Admins only" }, 403);
   if (head === "import" && method === "POST" && id === "preview") {
     const form = await req.formData();
     const file = form.get("file");
