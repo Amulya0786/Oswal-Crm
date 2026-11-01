@@ -14,6 +14,7 @@ const GROUPS = [
   { label: "Desk", items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
   { label: "Service", items: [
     { href: "/complaints", label: "Complaints", icon: ClipboardList },
+    { href: "/assign", label: "To assign", icon: ClipboardList },
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/map", label: "Map", icon: MapIcon },
     { href: "/attendance", label: "Attendance", icon: Clock },
@@ -27,6 +28,7 @@ const GROUPS = [
   ] },
   { label: "Admin", items: [
     { href: "/security", label: "Security", icon: Shield },
+    { href: "/health", label: "Data health", icon: Shield },
     { href: "/import", label: "Import", icon: Upload },
     { href: "/settings", label: "Settings", icon: Settings },
     { href: "/connect", label: "Power BI", icon: BarChart3 },
@@ -56,8 +58,11 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
     items: group.items.filter((item) => {
       if (item.href === "/security" || item.href === "/import" || item.href === "/settings" || item.href === "/connect") return user.caps.security;
       if (item.href === "/reports") return user.caps.report;
-      if (item.href === "/performance" || item.href === "/reports/daily" || item.href === "/assist") return user.caps.analytics;
+      if (item.href === "/assist") return process.env.NEXT_PUBLIC_AI === "1" && user.caps.analytics;
+      if (item.href === "/performance" || item.href === "/reports/daily") return user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
+      if (item.href === "/assign") return user.caps.assign;
+      if (item.href === "/health") return user.caps.security;
       if (item.href === "/map" || item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;
     }),
@@ -145,7 +150,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             document.documentElement.lang = next;
           }}>{lang === "hi" ? "EN" : "हिंदी"}</button>
           <ThemeToggle />
-          <button type="button" className="btn line" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
+          <button type="button" className="btn signout" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
           <span className="live-dot" title="Live" />
           <details className="user-menu">
             <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#d5e7dc" }}>{ROLE_LABEL[user.role]}</div></summary>

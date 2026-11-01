@@ -263,3 +263,41 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .live-dot, .login-bg, .login-bg-2, .tile { animation: none; }
   .tile:hover { transform: none; }
 }
+
+/* Release 3: restrained desk chrome. */
+:root, [data-theme="brand"] {
+  --ink: #111827;
+  --muted: #6b7280;
+  --paper: #f9fafb;
+  --paper-2: #f3f4f6;
+  --card: #ffffff;
+  --line: #e5e7eb;
+  --accent: #02502f;
+  --shadow: none;
+  --glow: none;
+  --radius: 4px;
+  --mast: #ffffff;
+  --mast-2: #ffffff;
+  --mast-ink: #111827;
+  --side: #f9fafb;
+}
+.kicker { display: none; }
+h1 { font-size: 18px; line-height: 24px; font-weight: 600; }
+h2 { font-size: 14px; line-height: 20px; font-weight: 600; }
+body, button, input, select, textarea { font-size: 13px; }
+.topband {
+  background: #fff;
+  color: #111827;
+  box-shadow: none;
+  border-bottom: 1px solid #e5e7eb;
+}
+.btn, .btn.line, .chip, input, select, textarea { border-radius: 4px; min-height: 32px; }
+.btn { background: #02502f; color: #fff; }
+.btn.line { background: #fff; color: #111827; border: 1px solid #d1d5db; }
+.btn.signout { background: #02502f; color: #fff; border: 0; }
+.panel, .tile, .table-wrap, .login-card { border-radius: 6px; box-shadow: none; border: 1px solid #e5e7eb; }
+.tile b { font-size: 20px; }
+.req { color: #b91c1c; }
+.book-page, .public-book, main { padding: 16px; }
+table th { font-size: 11px; letter-spacing: .02em; text-transform: uppercase; color: #6b7280; }
+[data-theme="dark"] { --paper: #0b0f0e; --card: #111827; --ink: #f9fafb; --line: #374151; --mast: #111827; --mast-ink: #f9fafb; }

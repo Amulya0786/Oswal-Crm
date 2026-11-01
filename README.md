@@ -163,4 +163,20 @@ A booking message includes `/track/<token>`. The same status is available from `
 
 ## Power BI and Excel
 
-Admins open **Power BI** and create a reporting key. The page shows the Web and OData addresses. Excel uses Data → From Web. Power BI uses Get data → OData or Web. Revoking a key stops that feed. The key is shown once.
+Admins open **Power BI** and create a reporting key. Send it only in the `x-report-key` header. A `?key=` query is rejected. Keys can expire, can be limited to a state or brand, and can be revoked. The page shows when a key was last used. The secret is shown once.
+
+## Staging
+
+Use a second DigitalOcean app from the same spec, with its own name and its own managed Postgres. Do not point it at the live database. Leave `NEXT_PUBLIC_DEMO_HINTS` unset. The live import and the live users stay on the production app. This document does not create that app.
+
+## Backups
+
+DigitalOcean managed Postgres takes a daily backup. Restore it once on the staging database: in the database page choose a backup, restore into the staging cluster, then open staging `/api/health` and confirm `db` is true. Do not restore a backup over the live database. This does not change the paid plan.
+
+## Error monitoring
+
+Set `SENTRY_DSN` if you want the app to forward errors. Leave it empty and nothing is sent. `/api/health` checks that Postgres answers.
+
+## Mail
+
+Password reset and the bulk user import send a 30-minute link when `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `SMTP_FROM` are set. Without them the link is not emailed.

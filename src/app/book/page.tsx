@@ -106,7 +106,7 @@ export default function PublicBookPage() {
         form.reset();
       }}>
         <label className="stack">{t.name}<input name="customerName" required /></label>
-        <label className="stack">{t.mobile}<input name="phone" inputMode="numeric" required /></label>
+        <label className="stack">{t.mobile} <span className="req">*</span><input name="phone" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required /></label>
         <button type="button" className="btn line" onClick={async () => {
           const phone = String(new FormData(document.querySelector("form") as HTMLFormElement).get("phone") ?? "").replace(/\D/g, "").slice(-10);
           const response = await fetch("/api/public/otp-book", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
@@ -115,9 +115,9 @@ export default function PublicBookPage() {
           setOtpSent(body.devCode ? `${t.sent}: ${body.devCode}` : t.sent);
         }}>{t.send}</button>
         {otpSent && <p>{otpSent}</p>}
-        <label className="stack">{t.otp}<input name="otp" inputMode="numeric" required /></label>
+        <label className="stack">{t.otp} <span className="req">*</span><input name="otp" inputMode="numeric" maxLength={6} required /></label>
         <label className="stack">{t.district}<input name="districtName" required /></label>
-        <label className="stack">{t.pin}<input name="pincode" inputMode="numeric" required /></label>
+        <label className="stack">{t.pin} <span className="req">*</span><input name="pincode" inputMode="numeric" maxLength={6} pattern="[1-9][0-9]{5}" required /></label>
         <label className="stack">{t.product}
           <select name="product" required defaultValue="Solar pump">{PRODUCTS.map((item) => <option key={item}>{item}</option>)}</select>
         </label>

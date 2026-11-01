@@ -15,15 +15,22 @@ export default function LoginPage() {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: formData.get("email"), password: formData.get("password") }),
+      body: JSON.stringify({ email: formData.get("email"), password: formData.get("password"), totp: formData.get("totp") }),
     });
     setPending(false);
+    const body = await response.json();
+    if (body.needsTotp) {
+      setError("Enter the 6-digit authenticator code");
+      return;
+    }
+    if (body.setupTotp) {
+      window.location.href = `/totp?user=${body.userId}`;
+      return;
+    }
     if (!response.ok) {
-      const body = await response.json();
       setError(body.error ?? "Could not sign in");
       return;
     }
-    const body = await response.json();
     if (body.mustChangePassword) {
       window.location.href = "/password";
       return;
@@ -43,6 +50,9 @@ export default function LoginPage() {
           <h2>Service desk</h2>
           <label className="stack">Email<input name="email" type="email" autoComplete="username" required defaultValue={showDemo ? "admin@oswal.test" : ""} /></label>
           <label className="stack">Password<input name="password" type="password" autoComplete="current-password" required defaultValue={showDemo ? "Admin@123" : ""} /></label>
+          <label className="stack">Authenticator code<input name="totp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} /></label>
+          <a href="/forgot">Forgot password</a>
+          <a href="/book">Register a complaint</a>
           {error && <div className="banner bad">{error}</div>}
           <button className="btn" disabled={pending}>{pending ? "Signing in…" : "Enter the desk"}</button>
           {showDemo && (

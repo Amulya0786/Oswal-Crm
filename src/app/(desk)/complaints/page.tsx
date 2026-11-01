@@ -6,6 +6,7 @@ import { filtersFromRecord } from "@/server/scope";
 import { ComplaintFeed, SaveView } from "@/components/complaint-tools";
 import { CALL_TYPES, STATUSES } from "@/lib/labels";
 import { formatNumber } from "@/lib/time";
+import { ImportBanner } from "@/components/import-banner";
 
 export const metadata = { title: "Complaints" };
 
@@ -14,6 +15,10 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   if (!user) return null;
   const sp = await searchParams;
   const filters = filtersFromRecord(sp);
+  if (!filters.stateId && typeof sp.state === "string") {
+    const named = await prisma.state.findFirst({ where: { name: { equals: sp.state, mode: "insensitive" } }, select: { id: true } });
+    if (named) filters.stateId = named.id;
+  }
   const [data, states, engineers, problems, solutions, views] = await Promise.all([
     listComplaints(user, scope, filters),
     prisma.state.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -25,6 +30,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const search = new URLSearchParams(Object.entries(sp).flatMap(([key, value]) => typeof value === "string" && key !== "page" && key !== "cursor" ? [[key, value]] : [])).toString();
   return (
     <div>
+      <ImportBanner />
       <div className="page-head">
         <div>
           <p className="kicker">Complaint register</p>
@@ -33,7 +39,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         {user.caps.book && <Link className="btn" href="/complaints/book">Book</Link>}
       </div>
       <form className="filters" action="/complaints">
-        <input name="q" defaultValue={filters.q ?? ""} placeholder="Search" />
+        <label className="stack">Search<input name="q" defaultValue={filters.q ?? ""} /></label>
         <select name="status" defaultValue={filters.status ?? ""}><option value="">Any status</option>{STATUSES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
         <select name="callType" defaultValue={filters.callType ?? ""}><option value="">Any call type</option>{CALL_TYPES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
         <select name="stateId" defaultValue={filters.stateId ?? ""}><option value="">Any state</option>{states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}</select>

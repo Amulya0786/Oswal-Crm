@@ -15,7 +15,7 @@ export default function TrackPage() {
   return (
     <main className="main" style={{ maxWidth: 640 }}>
       <BrandLogo />
-      <h1 style={{ fontFamily: "var(--display)" }}>Track a complaint</h1>
+      <h1>Track a complaint</h1>
       {step === "ask" && (
         <form className="stack" onSubmit={async (event) => {
           event.preventDefault();
@@ -24,8 +24,8 @@ export default function TrackPage() {
           if (!response.ok) setError(body.error);
           else { setDevCode(body.devCode ?? ""); setStep("otp"); setError(""); }
         }}>
-          <input placeholder="Comp. No" value={ticket} onChange={(event) => setTicket(event.target.value)} required />
-          <input placeholder="Mobile" value={phone} onChange={(event) => setPhone(event.target.value)} required />
+          <label className="stack">Complaint number<input value={ticket} maxLength={20} onChange={(event) => setTicket(event.target.value)} required /></label>
+          <label className="stack">Mobile<input value={phone} inputMode="numeric" maxLength={10} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))} required /></label>
           <button className="btn">Send OTP</button>
         </form>
       )}
@@ -38,7 +38,7 @@ export default function TrackPage() {
           else { setResult(body); setStep("done"); }
         }}>
           {devCode && process.env.NEXT_PUBLIC_SHOW_DEV_OTP === "1" && <div className="banner">Demo OTP: {devCode}</div>}
-          <input placeholder="OTP" value={code} onChange={(event) => setCode(event.target.value)} required />
+          <label className="stack">OTP<input value={code} inputMode="numeric" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} required /></label>
           <button className="btn">Show status</button>
         </form>
       )}

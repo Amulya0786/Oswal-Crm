@@ -41,6 +41,23 @@ export default function FieldPage() {
     }
   }
 
+  async function scanSerial(id: string) {
+    const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+    if (!Detector || !navigator.mediaDevices) {
+      setMessage(lang === "hi" ? "इस फोन पर स्कैन नहीं खुलता" : "This browser has no barcode scanner");
+      return;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    await video.play();
+    const codes = await new Detector({ formats: ["qr_code", "code_128", "code_39"] }).detect(video);
+    stream.getTracks().forEach((track) => track.stop());
+    const serial = codes[0]?.rawValue;
+    if (!serial) { setMessage(lang === "hi" ? "कोड नहीं मिला" : "No code found"); return; }
+    await send("/api/field/serial", { complaintId: id, serial });
+  }
+
   function locate(kind: "START" | "ARRIVE", id: string) {
     if (!navigator.geolocation) return void send("/api/field/checkin", { complaintId: id, kind });
     navigator.geolocation.getCurrentPosition(
@@ -71,6 +88,9 @@ export default function FieldPage() {
           <span>{visit.productDetails}{visit.serialPending ? " · Serial pending" : ""}</span>
           <a className="btn line" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([visit.address, visit.districtName, visit.pincode].filter(Boolean).join(", "))}`}>Map</a>
           <div className="filters">
+            <button className="btn line" onClick={() => void scanSerial(visit.id)}>{copy.scan}</button>
+            <button className="btn" onClick={() => void send("/api/field/respond", { complaintId: visit.id, decision: "accept" })}>{lang === "hi" ? "स्वीकार" : "Accept"}</button>
+            <button className="btn line" onClick={() => void send("/api/field/respond", { complaintId: visit.id, decision: "reject", reason: "Cannot attend" })}>{lang === "hi" ? "अस्वीकार" : "Reject"}</button>
             <button className="btn line" onClick={() => locate("START", visit.id)}>{copy.start}</button>
             <button className="btn" onClick={() => locate("ARRIVE", visit.id)}>{copy.arrive}</button>
           </div>
