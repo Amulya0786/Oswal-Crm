@@ -10,7 +10,9 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<"desk" | "whatsapp" | "proof">("desk");
   async function load() {
     const response = await fetch("/api/desk/settings");
-    if (response.ok) setData(await response.json());
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) setData(body);
+    else setData({ error: body.error ?? "Could not load settings", slas: [], rules: [], templates: [], webhooks: [], escalations: [] });
   }
   useEffect(() => {
     void load();
@@ -24,6 +26,7 @@ export default function SettingsPage() {
     await load();
   }
   if (!data) return <p>Loading settings…</p>;
+  if (data.error) return <div className="banner bad">{data.error}</div>;
   return (
     <div>
       <div className="page-head"><div><h1>Settings</h1></div></div>
@@ -38,7 +41,7 @@ export default function SettingsPage() {
       {tab === "desk" && <>
       <section className="panel">
         <h2>SLA hours</h2>
-        {data.slas.map((row: any) => (
+        {(data.slas ?? []).map((row: any) => (
           <form key={row.id} className="filters" onSubmit={(event) => { event.preventDefault(); post({ kind: "sla", companyId: row.companyId, callType: row.callType, hours: new FormData(event.currentTarget).get("hours") }); }}>
             <span>{row.company.shortName} · {row.callType}</span>
             <input name="hours" defaultValue={row.hours} />
@@ -48,7 +51,7 @@ export default function SettingsPage() {
       </section>
       <section className="panel" style={{ marginTop: 12 }}>
         <h2>Rules</h2>
-        {data.rules.map((rule: any) => <p key={rule.id}>{rule.name} <button className="btn line" onClick={() => post({ kind: "rule-delete", id: rule.id })}>Remove</button><br /><span className="muted">{rule.definition}</span></p>)}
+        {(data.rules ?? []).map((rule: any) => <p key={rule.id}>{rule.name} <button className="btn line" onClick={() => post({ kind: "rule-delete", id: rule.id })}>Remove</button><br /><span className="muted">{rule.definition}</span></p>)}
         <form className="stack" onSubmit={(event) => {
           event.preventDefault();
           const dataForm = new FormData(event.currentTarget);

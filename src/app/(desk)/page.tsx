@@ -28,8 +28,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const data = await homeSnapshot(user, scope, view === "state" ? stateName || null : null);
   const lang = (await cookies()).get("oswal_lang")?.value === "hi" ? "hi" : "en";
   const t = (text: string) => phrase(lang, text);
-  const max = Math.max(...data.places.map((row) => row.open), 1);
-  const trendMax = Math.max(...data.trend.map((row) => row.booked), 1);
+  const places = data.places ?? [];
+  const trend = data.trend ?? [];
+  const ageing = data.ageing ?? [];
+  const companies = data.companies ?? [];
+  const technicians = data.technicians ?? [];
+  const kpi = data.kpi ?? { booked: 0, closed: 0, pending: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0 };
+  const max = Math.max(1, ...places.map((row) => row.open));
+  const trendMax = Math.max(1, ...trend.map((row) => row.booked));
   return (
     <div>
       <ImportBanner />
@@ -55,50 +61,50 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </form>
       )}
       <div className="tile-grid">
-        <Link className="tile" href="/complaints?booked=today"><span>Booked today</span><b>{formatNumber(data.kpi.booked)}</b></Link>
-        <Link className="tile" href="/complaints?closed=today"><span>Closed today</span><b>{formatNumber(data.kpi.closed)}</b></Link>
-        <Link className="tile" href="/complaints?statusGroup=active"><span>Pending</span><b>{formatNumber(data.kpi.pending)}</b></Link>
-        {view !== "desk" && <Link className="tile" href="/complaints?breach=1"><span>Overdue</span><b>{formatNumber(data.kpi.overdue)}</b></Link>}
-        {view !== "desk" && <Link className="tile" href="/complaints?statusGroup=active"><span>First contact overdue</span><b>{formatNumber(data.kpi.first_contact ?? 0)}</b></Link>}
+        <Link className="tile" href="/complaints?booked=today"><span>Booked today</span><b>{formatNumber(kpi.booked)}</b></Link>
+        <Link className="tile" href="/complaints?closed=today"><span>Closed today</span><b>{formatNumber(kpi.closed)}</b></Link>
+        <Link className="tile" href="/complaints?statusGroup=active"><span>Pending</span><b>{formatNumber(kpi.pending)}</b></Link>
+        {view !== "desk" && <Link className="tile" href="/complaints?breach=1"><span>Overdue</span><b>{formatNumber(kpi.overdue)}</b></Link>}
+        {view !== "desk" && <Link className="tile" href="/complaints?statusGroup=active"><span>First contact overdue</span><b>{formatNumber(kpi.first_contact ?? 0)}</b></Link>}
         {view !== "desk" && <Link className="tile" href="/assign"><span>To assign</span><b>{formatNumber(data.unassigned ?? 0)}</b></Link>}
         {view !== "desk" && <Link className="tile" href="/complaints?booked=month"><span>This month</span><b>{formatNumber(data.monthBooked ?? 0)}</b></Link>}
         {view !== "desk" && <Link className="tile" href="/contracts"><span>AMC due</span><b>{formatNumber(data.amc ?? 0)}</b></Link>}
       </div>
       {view === "desk" && (
         <div className="grid-2" style={{ marginTop: 16 }}>
-          <Queue title="Booked today" rows={data.todayBooked} />
-          <Queue title="Pending" rows={data.followUps} />
-          <Queue title="Happy calling" rows={data.happyQueue} />
+          <Queue title="Booked today" rows={data.todayBooked ?? []} />
+          <Queue title="Pending" rows={data.followUps ?? []} />
+          <Queue title="Happy calling" rows={data.happyQueue ?? []} />
         </div>
       )}
       {view !== "desk" && (
         <div className="grid-2" style={{ marginTop: 16 }}>
           <section className="panel">
             <h2>{view === "state" ? "Districts" : "States"}</h2>
-            {data.places.map((row) => (
+            {places.map((row) => (
               <div key={row.label} className="bar-row">
                 <span>{row.label}</span>
                 <span className="bar-track"><span style={{ width: `${(row.open / max) * 100}%` }} /></span>
                 <b>{formatNumber(row.open)}</b>
               </div>
             ))}
-            {!data.places.length && <p>No open complaints.</p>}
+            {!places.length && <p>No open complaints.</p>}
           </section>
           <section className="panel">
             <h2>Ageing</h2>
-            <table><tbody>{data.ageing.map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>
-            {!data.ageing.length && <p>No open complaints.</p>}
+            <table><tbody>{ageing.map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>
+            {!ageing.length && <p>No open complaints.</p>}
             <h2>Repeat and ratings</h2>
-            <p>Repeat open · {formatNumber(data.kpi.repeats)}</p>
-            <p>Happy calling waiting · {formatNumber(data.kpi.happy)}</p>
-            <p>Average rating · {data.kpi.rating || "—"}</p>
+            <p>Repeat open · {formatNumber(kpi.repeats)}</p>
+            <p>Happy calling waiting · {formatNumber(kpi.happy)}</p>
+            <p>Average rating · {kpi.rating || "—"}</p>
             <h2>Companies</h2>
-            {data.companies.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} open</p>)}
+            {companies.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} open</p>)}
           </section>
           <section className="panel">
             <h2>Technicians, 30 days</h2>
-            {data.technicians.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} closed</p>)}
-            {!data.technicians.length && <p>No closures in 30 days.</p>}
+            {technicians.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} closed</p>)}
+            {!technicians.length && <p>No closures in 30 days.</p>}
           </section>
           <section className="panel">
             <h2>Pending by call type</h2>
@@ -110,14 +116,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </section>
           <section className="panel">
             <h2>30-day bookings</h2>
-            {data.trend.map((row) => (
+            {trend.map((row) => (
               <div key={String(row.day)} className="bar-row">
                 <span>{new Date(row.day).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span>
                 <span className="bar-track"><span style={{ width: `${(row.booked / trendMax) * 100}%` }} /></span>
                 <b>{formatNumber(row.booked)}</b>
               </div>
             ))}
-            {!data.trend.length && <p>No bookings in 30 days.</p>}
+            {!trend.length && <p>No bookings in 30 days.</p>}
           </section>
         </div>
       )}

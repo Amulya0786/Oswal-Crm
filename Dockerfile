@@ -19,5 +19,8 @@ RUN npx prisma generate && npm run build \
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# Leave room in the 1GB instance for the system and Prisma. The paid size stays apps-s-1vcpu-1gb.
+ENV NODE_OPTIONS=--max-old-space-size=448
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node scripts/bootstrap.mjs && node .next/standalone/server.js"]
+# Migrations run in the App Platform pre-deploy job. Starting only the server keeps this process small enough to pass the health check.
+CMD ["node", ".next/standalone/server.js"]

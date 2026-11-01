@@ -63,7 +63,7 @@ export async function release3(method: string, head: string, id: string | undefi
   }
   if (head === "assign" && method === "GET") {
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
-    await sweepAssignmentQueue();
+    try { await sweepAssignmentQueue(); } catch { /* the queue still loads if the sweep cannot write */ }
     const rows = await prisma.complaint.findMany({
       where: { status: "OPEN", engineerId: null, excludeFromMis: false, ...(user.role === "STATE_HEAD" ? { stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } } : {}) },
       orderBy: { bookDate: "asc" },

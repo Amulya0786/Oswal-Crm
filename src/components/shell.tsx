@@ -19,6 +19,7 @@ const GROUPS = [
     { href: "/map", label: "Map", icon: MapIcon },
     { href: "/attendance", label: "Attendance", icon: Clock },
     { href: "/expenses", label: "Expenses", icon: ClipboardList },
+    { href: "/leave", label: "Leave", icon: Clock },
     { href: "/contracts", label: "AMC", icon: ClipboardList },
   ] },
   { label: "Masters", items: [{ href: "/masters", label: "Masters", icon: Library }] },
@@ -65,7 +66,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       if (item.href === "/performance" || item.href === "/reports/daily") return user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
       if (item.href === "/assign") return user.caps.assign;
-      if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/engineers") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
+      if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/engineers" || item.href === "/leave") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       if (item.href === "/health") return user.caps.security;
       if (item.href === "/map" || item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;

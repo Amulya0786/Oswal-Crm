@@ -142,6 +142,12 @@ export async function login(email: string, password: string, meta: { ip?: string
     if (!user.totpSecret || !totpMatches(user.totpSecret, meta.totp ?? "")) return { needsTotp: true as const };
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
+  return openSession(user.id);
+}
+
+export async function openSession(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: userInclude });
+  if (!user || !user.active) return null;
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await prisma.session.create({ data: { token, userId: user.id, expiresAt: new Date(Date.now() + 7 * 86400000) } });
   return { token, user: toSessionUser(user) };

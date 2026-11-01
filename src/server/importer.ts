@@ -1,5 +1,4 @@
 import path from "path";
-import ExcelJS from "exceljs";
 import { prisma, bumpVersion } from "./db";
 import { HttpError } from "./http";
 import { nextTicketNo, rememberTicket } from "./ticket-seq";
@@ -47,8 +46,9 @@ export async function previewImport(fileName: string, bytes: Buffer) {
 
 async function readTableBytes(bytes: Buffer, fileName: string) {
   if (fileName.toLowerCase().endsWith(".csv")) return parseCsv(bytes.toString("utf8"));
+  const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(bytes as unknown as ExcelJS.Buffer);
+  await workbook.xlsx.load(bytes as unknown as import("exceljs").Buffer);
   const sheet = workbook.worksheets[0];
   if (!sheet) return { headers: [] as string[], rows: [] as Record<string, string>[] };
   const headers: string[] = [];
@@ -89,7 +89,9 @@ export async function commitImport(user: SessionUser, input: { token: string; en
   if (!user.caps.import) throw new HttpError(403, "You cannot import");
   const token = path.basename(input.token);
   const fileName = await loadObject(`imports/${token}.name`).then((bytes) => bytes.toString("utf8")).catch(() => "upload.csv");
-  const table = await readTableBytes(await loadObject(`imports/${token}`), fileName);
+  let fileBytes: Buffer | null = await loadObject(`imports/${token}`);
+  const table = await readTableBytes(fileBytes, fileName);
+  fileBytes = null;
   const rows = table.rows.map((row) => mapped(row, input.mapping));
   if (input.entity === "complaints") {
     await prisma.appSetting.upsert({ where: { key: "importRunning" }, create: { key: "importRunning", value: "1" }, update: { value: "1" } });
@@ -135,7 +137,7 @@ async function ensurePlace(stateByName: Map<string, any>, stateName?: string, di
     if (alias) {
       district = state.districts.find((item: { id: string }) => item.id === alias.districtId);
       if (!district) {
-        const found = await prisma.district.findUnique({ where: { id: alias.districtId }, include: { areas: true } });
+        const found = await prisma.district.findUnique({ where: { id: alias.districtId }, select: { id: true, name: true, stateId: true } });
         if (found) {
           district = found;
           state.districts.push(found);
@@ -152,7 +154,7 @@ async function ensurePlace(stateByName: Map<string, any>, stateName?: string, di
 }
 
 async function importComplaints(user: SessionUser, rows: Record<string, string>[], companyId: string | undefined, cutoff: Date) {
-  const states = await prisma.state.findMany({ include: { districts: { include: { areas: true } } } });
+  const states = await prisma.state.findMany({ select: { id: true, name: true, districts: { select: { id: true, name: true } } } });
   const stateByName = new Map(states.map((state) => [state.name.toLowerCase(), state]));
   const brands = await prisma.brand.findMany();
   const products = await prisma.product.findMany();
@@ -164,6 +166,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
   let undated = 0;
   const errors: string[] = [];
   const assetIds = new Set<string>();
+  const areaCache = new Map<string, { id: string; name: string } | null>();
   const companyCache = new Map<string, Awaited<ReturnType<typeof companyByCode>>>();
   for (let start = 0; start < rows.length; start += IMPORT_BATCH) {
     const batch = rows.slice(start, start + IMPORT_BATCH);
@@ -195,7 +198,15 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
       const placed = await ensurePlace(stateByName, row.stateName, row.districtName);
       const state = placed.state;
       const district = placed.district;
-      const area = district?.areas.find((item: { name: string }) => item.name.toLowerCase() === (row.areaName ?? "").trim().toLowerCase());
+      const areaName = (row.areaName ?? "").trim();
+      let area = district?.areas?.find((item: { name: string }) => item.name.toLowerCase() === areaName.toLowerCase()) ?? null;
+      if (!area && district && areaName) {
+        const key = `${district.id}|${areaName.toLowerCase()}`;
+        if (!areaCache.has(key)) {
+          areaCache.set(key, await prisma.area.findFirst({ where: { districtId: district.id, name: { equals: areaName, mode: "insensitive" } }, select: { id: true, name: true } }));
+        }
+        area = areaCache.get(key) ?? null;
+      }
       let brand = brands.find((item) => item.companyId === company.id && item.name.toLowerCase() === (row.brandName ?? "").trim().toLowerCase());
       const brandName = (row.brandName ?? "").trim();
       if (brandName && !brand) {

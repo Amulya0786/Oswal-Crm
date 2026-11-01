@@ -13,6 +13,7 @@ const secret = () => process.env.AUTH_SECRET || "dev";
 
 function gate(key: string) {
   const now = Date.now();
+  if (attempts.size > 5000) attempts.clear();
   const current = attempts.get(key) ?? [];
   const decision = allowPublicAttempt(current, now);
   if (!decision.ok) return false;

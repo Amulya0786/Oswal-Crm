@@ -460,7 +460,11 @@ async function route(method: string, slug: string[], req: Request) {
       prisma.escalationLog.findMany({ orderBy: { at: "desc" }, take: 20 }),
       prisma.appSetting.findUnique({ where: { key: "lastSummary" } }),
     ]);
-    return json({ slas, rules, templates, webhooks, escalations, summary: summary ? JSON.parse(summary.value) : null });
+    let parsedSummary = null;
+    if (summary?.value) {
+      try { parsedSummary = JSON.parse(summary.value); } catch { parsedSummary = null; }
+    }
+    return json({ slas, rules, templates, webhooks, escalations, summary: parsedSummary });
   }
   if (head === "settings" && method === "POST") {
     if (!user.caps.settings) return json({ error: "Admins only" }, 403);
