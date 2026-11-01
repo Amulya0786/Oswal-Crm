@@ -81,6 +81,9 @@ export function ComplaintTable({
             </tr>
           </thead>
           <tbody>
+            {!rows.length && (
+              <tr><td colSpan={12} className="muted">No complaints match. Book the first call, or clear the filters.</td></tr>
+            )}
             {rows.map((row) => (
               <tr key={row.id}>
                 <td data-label=""><input type="checkbox" checked={picked.includes(row.id)} onChange={(event) => setPicked(event.target.checked ? [...picked, row.id] : picked.filter((id) => id !== row.id))} /></td>
@@ -111,7 +114,7 @@ export function ComplaintTable({
           </tbody>
         </table>
       </div>
-      <button className="btn line" onClick={() => setPicked(picked.length === all.length ? [] : all)}>Select this page</button>
+      {rows.length > 0 && <button className="btn line" onClick={() => setPicked(picked.length === all.length ? [] : all)}>Select this page</button>}
     </div>
   );
 

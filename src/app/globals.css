@@ -154,6 +154,11 @@ th a { text-decoration: none; }
 }
 @media (max-width: 720px) {
   .mast { padding: 10px 12px 0; }
+  .mast-top { flex-wrap: wrap; align-items: flex-start; }
+  .switcher { order: 3; width: 100%; overflow-x: auto; }
+  .search-btn { margin-left: 0; }
+  .page-head { flex-direction: column; align-items: flex-start; }
+  .page-head .btn { align-self: stretch; text-align: center; }
   .main { padding: 14px; }
   .search-btn kbd, .brand em { display: none; }
   .table-wrap table thead { display: none; }

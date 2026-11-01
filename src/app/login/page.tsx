@@ -3,14 +3,7 @@
 import { useState } from "react";
 import { Mark } from "@/components/shell";
 
-const DEMOS = [
-  ["Admin", "admin@oswal.test", "Admin@123"],
-  ["Call centre", "desk@oswal.test", "Desk@123"],
-  ["Area manager", "area.karnal@oswal.test", "Area@123"],
-  ["State head", "state.mh@oswal.test", "State@123"],
-  ["Technician", "tech.karnal@oswal.test", "Tech@123"],
-  ["Dealer", "dealer.karnal@oswal.test", "Dealer@123"],
-];
+const DEMOS = [["Admin", "admin@oswal.test", "Admin@123"]];
 
 export default function LoginPage() {
   const [error, setError] = useState("");

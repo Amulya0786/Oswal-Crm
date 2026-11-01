@@ -128,6 +128,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
               {hits.complaints.map((row) => <Link className="hit" key={row.id} href={`/complaints/${row.ticketNo}`} onClick={() => setOpen(false)}><b className="mono">{row.ticketNo}</b> · {row.customerName} · {row.status}</Link>)}
               {hits.customers.map((row) => <Link className="hit" key={row.id} href={`/complaints?q=${encodeURIComponent(row.phone)}`} onClick={() => setOpen(false)}>{row.name} · {row.phone}</Link>)}
               {hits.engineers.map((row) => <Link className="hit" key={row.id} href={`/complaints?engineerId=${row.id}`} onClick={() => setOpen(false)}>{row.name}</Link>)}
+              {q.trim().length >= 2 && !hits.complaints.length && !hits.customers.length && !hits.engineers.length && <p className="muted">No matches yet.</p>}
             </div>
           </form>
         </div>

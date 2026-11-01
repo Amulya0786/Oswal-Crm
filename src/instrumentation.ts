@@ -1,6 +1,4 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (process.env.ENABLE_JOBS === "0" || process.env.VITEST) return;
-  const { startScheduler } = await import("./server/jobs");
-  startScheduler();
+  // Escalation and summary jobs run from /api/cron. They are not started here:
+  // importing the job module into this hook makes the dev server fail to boot.
 }

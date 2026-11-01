@@ -65,16 +65,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <b>{formatNumber(row.value)}</b>
             </Link>
           ))}
-          {!data.drill.rows.length && <p className="muted">No live complaints in this view.</p>}
+          {!data.drill.rows.length && <p className="muted">No live complaints yet. Book a call and it will show up here.</p>}
         </section>
         <section className="panel">
           <h2>30 day inflow and closures</h2>
-          <svg className="trend" viewBox="0 0 300 120" role="img">
-            <polyline fill="none" stroke="#c4621a" strokeWidth="2" points={data.trend.map((row, index) => `${index * 10},${110 - (row.logged / trendMax) * 100}`).join(" ")} />
-            <polyline fill="none" stroke="#1b7a49" strokeWidth="2" points={data.trend.map((row, index) => `${index * 10},${110 - (row.closed / trendMax) * 100}`).join(" ")} />
-          </svg>
+          {data.trend.every((row) => row.logged === 0 && row.closed === 0) ? (
+            <p className="muted">No bookings in the last 30 days.</p>
+          ) : (
+            <svg className="trend" viewBox="0 0 300 120" role="img">
+              <polyline fill="none" stroke="#c4621a" strokeWidth="2" points={data.trend.map((row, index) => `${index * 10},${110 - (row.logged / trendMax) * 100}`).join(" ")} />
+              <polyline fill="none" stroke="#1b7a49" strokeWidth="2" points={data.trend.map((row, index) => `${index * 10},${110 - (row.closed / trendMax) * 100}`).join(" ")} />
+            </svg>
+          )}
           <p className="muted">Copper is booked. Green is closed.</p>
           <h2>Latest complaints</h2>
+          {!data.recent.length && <p className="muted">Nothing booked yet.</p>}
           {data.recent.map((row) => (
             <Link key={row.id} href={`/complaints/${row.ticketNo}`} className="hit">
               <span className="mono">{row.ticketNo}</span> {row.customerName}
@@ -95,8 +100,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       )}
       <section className="panel" style={{ marginTop: 16 }}>
-        <h2>Serials still missing · {data.serialGap.percent}% ({data.serialGap.missing} of {data.serialGap.total})</h2>
-        <p className="muted"><a href="/reports/missing-serial">Open the missing-serial report</a></p>
+        <h2>Serials still missing · {data.serialGap.total ? `${data.serialGap.percent}% (${data.serialGap.missing} of ${data.serialGap.total})` : "no complaints yet"}</h2>
+        <p className="muted">{data.serialGap.total ? <a href="/reports/missing-serial">Open the missing-serial report</a> : "This share appears once complaints are booked."}</p>
         <div className="grid-2">
           <div>
             <h3>By state</h3>

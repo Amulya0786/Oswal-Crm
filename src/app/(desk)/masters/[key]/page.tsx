@@ -57,7 +57,8 @@ export default function MasterDetailPage() {
           <button className="btn">Save</button>
         </form>
       )}
-      <div className="table-wrap">
+      {!data.rows.length && <section className="panel"><p className="muted">No {data.title.toLowerCase()} yet. Add the first record when you are ready.</p></section>}
+      {!!data.rows.length && <div className="table-wrap">
         <table>
           <thead><tr>{data.columns.map((column: string) => <th key={column}>{column}</th>)}<th></th></tr></thead>
           <tbody>
@@ -69,7 +70,7 @@ export default function MasterDetailPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
