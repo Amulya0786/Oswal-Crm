@@ -250,6 +250,22 @@ export async function runSummary(now = new Date()) {
     const row = rows[0];
     lines.push(`${company.shortName}: logged ${row?.logged ?? 0}, closed ${row?.closed ?? 0}, pending ${row?.pending ?? 0}, SLA breached ${row?.breach ?? 0}`);
   }
+  const tops = await prisma.$queryRaw<{ kind: string; label: string; n: number }[]>`
+    SELECT 'district' AS kind, COALESCE("districtName", 'Unknown') AS label, COUNT(*)::int AS n
+    FROM "Complaint" WHERE "bookDate" >= ${start} AND "bookDate" < ${end} AND "excludeFromMis" = false
+    GROUP BY 2 ORDER BY n DESC LIMIT 5
+  `;
+  const techs = await prisma.$queryRaw<{ label: string; n: number }[]>`
+    SELECT COALESCE("assignedName", 'Unassigned') AS label, COUNT(*)::int AS n
+    FROM "Complaint" WHERE "bookDate" >= ${start} AND "bookDate" < ${end} AND "excludeFromMis" = false
+    GROUP BY 1 ORDER BY n DESC LIMIT 5
+  `;
+  const repeats = await prisma.complaint.count({ where: { bookDate: { gte: start, lt: end }, repeatWindow: { not: null }, excludeFromMis: false } });
+  if (tops.length) lines.push(`Top districts: ${tops.map((row) => `${row.label} ${row.n}`).join(", ")}`);
+  else lines.push("Top districts: none");
+  if (techs.length) lines.push(`Technicians: ${techs.map((row) => `${row.label} ${row.n}`).join(", ")}`);
+  else lines.push("Technicians: none");
+  lines.push(`Repeat failures: ${repeats}`);
   const origin = process.env.APP_URL ?? "http://localhost:3000";
   const html = `<article style="font-family:Inter,Arial,sans-serif;color:#242424"><div style="background:#02502f;padding:16px 20px"><img src="${origin}/brand/pumps-logo.png" alt="Oswal" height="64" /></div><h1>Oswal daily summary</h1><ul>${lines.slice(1).map((line) => `<li>${line}</li>`).join("")}</ul></article>`;
   const pdf = textPdf("Oswal daily summary", lines);
@@ -267,6 +283,21 @@ export async function runSummary(now = new Date()) {
   await prisma.notificationLog.create({
     data: { channel: "EMAIL", recipient: to, event: "SUMMARY", body: lines.join("\n"), provider: "console", status: "LOGGED", detail: file },
   });
+  const managers = (process.env.SUMMARY_WHATSAPP ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  const { sendWhatsApp } = await import("./whatsapp");
+  for (const phone of managers) {
+    await sendWhatsApp({ event: "SUMMARY", to: phone, body: lines.join("\n") });
+  }
+  const breached = await prisma.complaint.findMany({
+    where: { slaBreached: true, status: { in: [...ACTIVE] }, excludeFromMis: false },
+    orderBy: { slaDueAt: "asc" },
+    take: 15,
+    select: { id: true, phone: true, ticketNo: true, customerName: true, companyId: true },
+  });
+  const { notifyWhatsAppEvent } = await import("./whatsapp");
+  for (const row of breached) {
+    await notifyWhatsAppEvent("SLA_APOLOGY", { phone: row.phone, companyId: row.companyId, complaintId: row.id, vars: { ticketNo: row.ticketNo, customerName: row.customerName, engineer: "", engineerPhone: "", scheduleDate: "", link: "", otp: "" } });
+  }
   return { lines, file };
 }
 

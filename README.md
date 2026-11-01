@@ -36,3 +36,31 @@ Closing still asks for the serial, a nameplate photo, or a reason. Closures with
 ```bash
 npm test
 ```
+
+## Phase 2
+
+The desk keeps working with no extra keys. Messages are logged, the map uses OpenStreetMap, and the public form shows the OTP in the response until a provider is configured.
+
+| Key | Used for |
+| --- | --- |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | Meta WhatsApp Cloud API |
+| `WHATSAPP_VERIFY_TOKEN` | Webhook verification at `GET /api/public/whatsapp` |
+| `WHATSAPP_TEMPLATE_OSWAL_REGISTERED_EN` (and the other `WHATSAPP_TEMPLATE_*` names) | Optional approved template name. Without it, Cloud API sends the text body |
+| `WHATSAPP_BSP_URL`, `WHATSAPP_BSP_KEY`, `WHATSAPP_BSP_NAME` | Generic BSP (Interakt, AiSensy, or similar). JSON `POST` with `to` and `text` |
+| `GUPSHUP_API_KEY`, `GUPSHUP_SOURCE`, `GUPSHUP_SRC_NAME` | Gupshup, used when the generic BSP URL is not set |
+| `SUMMARY_EMAIL` | Daily summary recipient. Mail stays in the log until `SMTP_URL` is wired |
+| `SUMMARY_WHATSAPP` | Comma-separated manager mobiles for the same summary |
+| `NEXT_PUBLIC_GOOGLE_MAPS_KEY` or `GOOGLE_MAPS_KEY` | Optional. Default tiles are OpenStreetMap via Leaflet |
+| `VISIT_RATE` | Rupees per closed visit on the technician earnings screen. Blank shows the visit count only |
+| `AUTH_SECRET` | Signs the public-form captcha |
+| `MSG91_AUTH_KEY` | When set, booking and track OTPs are not returned in the API response |
+
+Webhook for inbound status and opt-out: `POST /api/public/whatsapp`. A customer can send the Comp. No or their mobile. `STOP` or `बंद` opts out. `START` opts back in. Five WhatsApp messages per mobile per hour.
+
+Website form: `/book`, also embeddable in an iframe. It asks for a mobile OTP and a captcha before it books into the same OPL sequence.
+
+Technician app: `/field` (installable PWA). Visits, GPS check-in, attendance and earnings. Offline posts wait on the phone and retry when the network returns.
+
+Telephony is a stub. `/calls` looks up a caller by mobile and writes a call on the ticket. No PBX is attached.
+
+Info@ email booking, Business Central and the dealer portal are not in this phase.

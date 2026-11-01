@@ -1,0 +1,157 @@
+import { prisma } from "./db";
+import { normalizePhone } from "@/lib/mask";
+import { allowSend, classifyInbound, renderWhatsApp, statusReply, type Lang, type WhatsAppEvent } from "@/lib/phase2";
+import { labelOf, STATUSES } from "@/lib/labels";
+
+export function whatsAppMode(): "meta" | "bsp" | "log" {
+  if (process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID) return "meta";
+  if (process.env.WHATSAPP_BSP_URL && process.env.WHATSAPP_BSP_KEY) return "bsp";
+  if (process.env.GUPSHUP_API_KEY && process.env.GUPSHUP_SOURCE) return "bsp";
+  return "log";
+}
+
+async function postMeta(to: string, body: string, template: string) {
+  const named = process.env[`WHATSAPP_TEMPLATE_${template.toUpperCase()}`];
+  const payload = named
+    ? { messaging_product: "whatsapp", to, type: "template", template: { name: named, language: { code: "en" } } }
+    : { messaging_product: "whatsapp", to, type: "text", text: { body } };
+  const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(4000),
+  });
+  return { provider: "meta", status: response.ok ? "SENT" : "FAILED", detail: (await response.text()).slice(0, 400) };
+}
+
+async function postBsp(to: string, body: string) {
+  if (process.env.WHATSAPP_BSP_URL && process.env.WHATSAPP_BSP_KEY) {
+    const response = await fetch(process.env.WHATSAPP_BSP_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_BSP_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ to, type: "text", text: body, channel: "whatsapp" }),
+      signal: AbortSignal.timeout(4000),
+    });
+    return { provider: process.env.WHATSAPP_BSP_NAME || "bsp", status: response.ok ? "SENT" : "FAILED", detail: (await response.text()).slice(0, 400) };
+  }
+  const form = new URLSearchParams({
+    channel: "whatsapp",
+    source: process.env.GUPSHUP_SOURCE ?? "",
+    destination: to,
+    "src.name": process.env.GUPSHUP_SRC_NAME ?? "",
+    message: JSON.stringify({ type: "text", text: body }),
+  });
+  const response = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+    method: "POST",
+    headers: { apikey: process.env.GUPSHUP_API_KEY ?? "", "Content-Type": "application/x-www-form-urlencoded" },
+    body: form,
+    signal: AbortSignal.timeout(4000),
+  });
+  return { provider: "gupshup", status: response.ok ? "SENT" : "FAILED", detail: (await response.text()).slice(0, 400) };
+}
+
+export async function sendWhatsApp(input: {
+  event: WhatsAppEvent | "STATUS" | "SUMMARY";
+  to: string;
+  body: string;
+  template?: string;
+  companyId?: string | null;
+  complaintId?: string | null;
+  lang?: Lang;
+}) {
+  const phone = normalizePhone(input.to);
+  if (phone.length < 10) return { status: "SKIPPED", detail: "bad phone" };
+  const opted = await prisma.whatsAppOptOut.findUnique({ where: { phoneNorm: phone } });
+  if (opted && input.event !== "STATUS") return { status: "SKIPPED", detail: "opt-out" };
+  const since = new Date(Date.now() - 60 * 60 * 1000);
+  const recent = await prisma.notificationLog.count({ where: { channel: "WHATSAPP", recipient: phone, at: { gte: since } } });
+  if (!allowSend(recent)) return { status: "SKIPPED", detail: "rate limit" };
+  const mode = whatsAppMode();
+  let result = { provider: "log", status: "LOGGED", detail: "no provider keys" };
+  try {
+    if (mode === "meta") result = await postMeta(phone, input.body, input.template ?? input.event);
+    else if (mode === "bsp") result = await postBsp(phone, input.body);
+    else console.log(`[whatsapp:${input.event}] -> ${phone} | ${input.body}`);
+  } catch (error) {
+    result = { provider: mode, status: "FAILED", detail: error instanceof Error ? error.message : "send failed" };
+  }
+  await prisma.notificationLog.create({
+    data: {
+      channel: "WHATSAPP",
+      recipient: phone,
+      event: input.event,
+      body: input.body,
+      provider: result.provider,
+      status: result.status,
+      detail: result.detail,
+      companyId: input.companyId,
+      complaintId: input.complaintId,
+    },
+  });
+  if (input.complaintId) {
+    await prisma.complaintEvent.create({
+      data: {
+        complaintId: input.complaintId,
+        type: "WHATSAPP",
+        actorName: "WhatsApp",
+        message: `${input.event} · ${result.status}${input.lang ? ` · ${input.lang}` : ""}`,
+      },
+    });
+  }
+  return result;
+}
+
+export async function notifyWhatsAppEvent(event: WhatsAppEvent, input: {
+  phone: string;
+  companyId?: string | null;
+  complaintId?: string | null;
+  lang?: Lang;
+  vars: Record<string, string>;
+}) {
+  const lang = input.lang ?? "en";
+  const saved = input.companyId
+    ? await prisma.notificationTemplate.findFirst({ where: { companyId: input.companyId, event: `WA_${event}_${lang.toUpperCase()}`, channel: "WHATSAPP", active: true } })
+    : null;
+  const rendered = renderWhatsApp(event, lang, input.vars);
+  const body = saved ? saved.body.replace(/\{\{(\w+)\}\}/g, (_, key: string) => input.vars[key] ?? "") : rendered.body;
+  return sendWhatsApp({ event, to: input.phone, body, template: rendered.template, companyId: input.companyId, complaintId: input.complaintId, lang });
+}
+
+export async function handleWhatsAppWebhook(payload: unknown) {
+  const message = extractInbound(payload);
+  if (!message) return { ok: true, ignored: true };
+  const kind = classifyInbound(message.text);
+  const phone = normalizePhone(message.from);
+  if (kind.kind === "optout") {
+    await prisma.whatsAppOptOut.upsert({ where: { phoneNorm: phone }, create: { phoneNorm: phone, source: "whatsapp" }, update: { at: new Date() } });
+    return { ok: true, optout: true };
+  }
+  if (kind.kind === "optin") {
+    await prisma.whatsAppOptOut.deleteMany({ where: { phoneNorm: phone } });
+    return { ok: true, optin: true };
+  }
+  const complaint = kind.kind === "ticket"
+    ? await prisma.complaint.findUnique({ where: { ticketNo: kind.ticketNo } })
+    : kind.kind === "phone"
+      ? await prisma.complaint.findFirst({ where: { phone: kind.phone }, orderBy: { bookDate: "desc" } })
+      : null;
+  if (!complaint) {
+    await sendWhatsApp({ event: "STATUS", to: phone, body: "Oswal: send the Comp. No (OPL…) or the registered mobile to check a complaint." });
+    return { ok: true, found: false };
+  }
+  const body = statusReply("en", { ticketNo: complaint.ticketNo, status: labelOf(STATUSES, complaint.status), engineer: complaint.assignedName });
+  await sendWhatsApp({ event: "STATUS", to: phone, body, complaintId: complaint.id, companyId: complaint.companyId });
+  return { ok: true, ticketNo: complaint.ticketNo };
+}
+
+function extractInbound(payload: unknown): { from: string; text: string } | null {
+  const body = payload as {
+    from?: string;
+    text?: string;
+    entry?: { changes?: { value?: { messages?: { from?: string; text?: { body?: string } }[] } }[] }[];
+  };
+  const meta = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  if (meta?.from && meta.text?.body) return { from: meta.from, text: meta.text.body };
+  if (body.from && body.text) return { from: body.from, text: body.text };
+  return null;
+}

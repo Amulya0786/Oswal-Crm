@@ -13,6 +13,8 @@ import { listComplaints } from "@/server/query";
 import { runEscalation, runSummary } from "@/server/jobs";
 import { classifyDuplicates } from "@/lib/duplicates";
 import { findCustomer, loadCustomerHistory, mergeCustomers } from "@/server/link";
+import { telephony } from "@/server/telephony";
+import { loadScorecards, scorecardPdf, scorecardWorkbook } from "@/server/scorecard";
 import { normalizePhone, displayPhone } from "@/lib/mask";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 
@@ -63,6 +65,55 @@ async function route(method: string, slug: string[], req: Request) {
   const [head, id, extra] = slug;
 
   if (method === "GET" && head === "live") return json({ version: await getVersion() });
+
+  if (method === "GET" && head === "map") {
+    const company = scope === "all" ? {} : { companyId: scope };
+    const [complaints, engineers] = await Promise.all([
+      prisma.complaint.findMany({
+        where: { ...company, status: { in: ["OPEN", "ASSIGNED", "REASSIGNED", "PENDING"] }, lat: { not: null }, lng: { not: null }, excludeFromMis: false },
+        take: 400,
+        select: { id: true, ticketNo: true, status: true, lat: true, lng: true, bookDate: true, districtName: true, customerName: true },
+      }),
+      prisma.engineer.findMany({
+        where: { ...company, active: true },
+        take: 200,
+        select: { id: true, name: true, homeLat: true, homeLng: true, phone: true, locations: { orderBy: { at: "desc" }, take: 1 } },
+      }),
+    ]);
+    return json({
+      provider: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || process.env.GOOGLE_MAPS_KEY ? "google" : "osm",
+      complaints,
+      engineers: engineers.map((engineer) => ({
+        id: engineer.id,
+        name: engineer.name,
+        phone: engineer.phone,
+        lat: engineer.locations[0]?.lat ?? engineer.homeLat,
+        lng: engineer.locations[0]?.lng ?? engineer.homeLng,
+      })).filter((engineer) => engineer.lat != null && engineer.lng != null),
+    });
+  }
+
+  if (head === "scorecards" && method === "GET") {
+    if (!user.caps.report) return json({ error: "Reports only" }, 403);
+    const data = await loadScorecards(user, scope);
+    const format = url.searchParams.get("format");
+    if (format === "pdf") {
+      const pdf = scorecardPdf(data);
+      return new Response(pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": "attachment; filename=scorecards.pdf" } });
+    }
+    if (format === "xlsx") {
+      const file = await scorecardWorkbook(data);
+      return new Response(file, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": "attachment; filename=scorecards.xlsx" } });
+    }
+    return json(data);
+  }
+
+  if (head === "calls" && method === "POST") {
+    const body = await readJson(req);
+    const pop = await telephony().screenPop(String(body.phone ?? ""));
+    if (body.log !== false) await telephony().logCall({ phone: String(body.phone ?? ""), complaintId: pop.complaintId, note: body.note ? String(body.note) : "Screen pop" });
+    return json(pop);
+  }
 
   if (method === "GET" && head === "search") {
     const q = url.searchParams.get("q")?.trim() ?? "";
@@ -313,6 +364,12 @@ async function route(method: string, slug: string[], req: Request) {
       return json(await runEscalation({ force: true, maxBatches: 10 }));
     } else if (body.kind === "summary") {
       return json(await runSummary());
+    } else if (body.kind === "wa-template") {
+      await prisma.notificationTemplate.upsert({
+        where: { companyId_event_channel: { companyId: body.companyId, event: body.event, channel: "WHATSAPP" } },
+        create: { companyId: body.companyId, event: body.event, channel: "WHATSAPP", body: body.body, active: true },
+        update: { body: body.body, active: body.active !== false },
+      });
     }
     return json({ ok: true });
   }

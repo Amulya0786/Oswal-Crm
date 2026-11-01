@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, PanelLeft, Search, Settings, Shield, Upload, Users, Wallet } from "lucide-react";
+import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, Map as MapIcon, MessageCircle, PanelLeft, Phone, Search, Settings, Shield, Upload, Users, Wallet } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
@@ -13,25 +13,30 @@ const GROUPS = [
   { label: "Service", items: [
     { href: "/complaints", label: "Complaints", icon: ClipboardList },
     { href: "/customers", label: "Customers", icon: Users },
+    { href: "/map", label: "Map", icon: MapIcon },
     { href: "/attendance", label: "Attendance", icon: Clock },
     { href: "/expenses", label: "Expenses", icon: Wallet },
   ] },
   { label: "Masters", items: [{ href: "/masters", label: "Masters", icon: Library }] },
   { label: "Reports", items: [
     { href: "/reports", label: "Reports", icon: BarChart3 },
+    { href: "/reports/scorecards", label: "Scorecards", icon: BarChart3 },
+    { href: "/reports/daily", label: "Daily summary", icon: LineChart },
     { href: "/analytics", label: "Analytics", icon: LineChart },
   ] },
   { label: "Admin", items: [
     { href: "/security", label: "Security", icon: Shield },
     { href: "/import", label: "Import", icon: Upload },
     { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
+    { href: "/calls", label: "Calls", icon: Phone },
   ] },
 ];
 
 const CRUMB: Record<string, string> = {
   complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
   security: "Security", import: "Import", settings: "Settings", attendance: "Attendance", expenses: "Expenses",
-  exports: "Exports", customers: "Customers", assets: "Asset",
+  exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", calls: "Calls", scorecards: "Scorecards", daily: "Daily summary", field: "Technician",
 };
 
 export function Shell({ user, scope, version, children }: { user: SessionUser; scope: string; version: number; children: React.ReactNode }) {
@@ -48,7 +53,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
     ...group,
     items: group.items.filter((item) => {
       if (item.href === "/security") return user.caps.security;
-      if (item.href === "/settings") return user.caps.settings;
+      if (item.href === "/settings" || item.href === "/whatsapp") return user.caps.settings;
+      if (item.href === "/calls") return user.caps.assign || user.caps.settings;
       if (item.href === "/import") return user.caps.import;
       if (item.href === "/analytics" || item.href === "/reports") return user.caps.report || user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
@@ -130,6 +136,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             <div className="user-pop">
               <div style={{ padding: 8 }}>{user.email}</div>
               <Link href="/exports">Exports</Link>
+              <Link href="/field">Technician app</Link>
               <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}><LogOut size={14} /> Sign out</button>
             </div>
           </details>

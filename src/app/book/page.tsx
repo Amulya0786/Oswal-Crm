@@ -9,17 +9,20 @@ const PUBLIC_CATEGORIES = ["Solar Pump", "Submersible Pump", "Monoblock Pump", "
 export default function PublicBookPage() {
   const [companies, setCompanies] = useState<{ id: string; shortName: string; legalName: string; accent: string; code: string }[]>([]);
   const [companyId, setCompanyId] = useState("");
+  const [captcha, setCaptcha] = useState<{ token: string; question: string } | null>(null);
   const [ticket, setTicket] = useState("");
   const [error, setError] = useState("");
+  const [otpSent, setOtpSent] = useState("");
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    fetch("/api/health").catch(() => null);
-    const code = params.get("company") === "solar" ? "SOLAR" : "PUMPS";
+    const code = new URLSearchParams(window.location.search).get("company") === "solar" ? "SOLAR" : "PUMPS";
     fetch("/api/public/companies").then(async (response) => {
       if (!response.ok) return;
       const body = await response.json();
       setCompanies(body.companies);
       setCompanyId(body.companies.find((item: { code: string }) => item.code === code)?.id ?? body.companies[0]?.id);
+    }).catch(() => null);
+    fetch("/api/public/captcha").then(async (response) => {
+      if (response.ok) setCaptcha(await response.json());
     }).catch(() => null);
   }, []);
   const company = companies.find((item) => item.id === companyId);
@@ -27,42 +30,49 @@ export default function PublicBookPage() {
     <main className="main" style={{ maxWidth: 720 }}>
       <BrandLogo />
       <p className="kicker" style={{ color: company?.accent }}>{company?.legalName ?? "Oswal"}</p>
-      <h1 style={{ fontFamily: "var(--display)" }}>Book a complaint</h1>
+      <h1 style={{ fontFamily: "var(--display)" }}>Register a complaint</h1>
+      <p className="muted">For the website. The same Comp. No series, company rule and duplicate checks as the desk.</p>
       <div className="chips">{companies.map((item) => <button type="button" key={item.id} className={`chip ${item.id === companyId ? "on" : ""}`} onClick={() => setCompanyId(item.id)}>{item.shortName}</button>)}</div>
-      <p className="muted">The company follows the product. You can change it.</p>
       <form className="stack" onSubmit={async (event) => {
         event.preventDefault();
+        setError("");
         const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-        const source = new URLSearchParams(window.location.search).get("src") === "qr" ? "QR" : "WEB";
-        const response = await fetch("/api/public/book", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, companyId, source, natureText: data.natureText, callType: data.callType }) });
+        const response = await fetch("/api/public/book", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, companyId, product: data.product, problem: data.problem, natureText: data.problem, callType: "BREAKDOWN", captchaToken: captcha?.token }),
+        });
         const body = await response.json();
-        if (!response.ok) setError(body.error);
+        if (!response.ok) setError(body.error ?? "Could not book");
         else setTicket(body.ticketNo);
       }}>
-        <input name="customerName" placeholder="Your name" required />
-        <input name="phone" placeholder="Mobile" required />
-        <input name="serialNo" placeholder="Serial on the pump, if you can see it" />
-        <label className="chip"><input type="checkbox" name="serialUnavailable" value="true" /> Serial not available</label>
-        <select name="serialUnavailableReason" defaultValue="STICKER_MISSING">
-          <option value="STICKER_MISSING">Sticker missing or damaged</option>
-          <option value="CUSTOMER_ABSENT">I am not at the pump</option>
-          <option value="SCHEME">Scheme beneficiary, serial not with me</option>
-          <option value="OTHER">Other</option>
-        </select>
-        <input name="address" placeholder="Address" />
+        <input name="customerName" placeholder="Name" required />
+        <div className="filters">
+          <input name="phone" placeholder="Mobile" required />
+          <button type="button" className="btn line" onClick={async () => {
+            const phone = (document.querySelector("input[name=phone]") as HTMLInputElement | null)?.value ?? "";
+            const response = await fetch("/api/public/otp-book", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
+            const body = await response.json();
+            setOtpSent(response.ok ? (body.devCode ? `Code ${body.devCode} (log only)` : "Code sent") : body.error);
+          }}>Send OTP</button>
+        </div>
+        {otpSent && <p className="muted">{otpSent}</p>}
+        <input name="otp" placeholder="Mobile OTP" required />
+        <input name="districtName" placeholder="District" required />
         <input name="pincode" placeholder="Pincode" required />
-        <select name="productCategory" defaultValue="Solar Pump" onChange={(event) => {
+        <select name="product" defaultValue="Solar Pump" onChange={(event) => {
           const code = companyCodeForCategory(event.target.value);
           const next = companies.find((item) => item.code === code);
           if (next) setCompanyId(next.id);
-        }}>
-          {PUBLIC_CATEGORIES.map((name) => <option key={name}>{name}</option>)}
-        </select>
-        <select name="callType" defaultValue="BREAKDOWN"><option value="BREAKDOWN">Breakdown</option><option value="INSTALLATION">Installation</option><option value="SCHEME">Scheme / KUSUM</option><option value="INSURANCE">Insurance</option></select>
-        <input name="natureText" placeholder="What is wrong?" required />
+        }}>{PUBLIC_CATEGORIES.map((name) => <option key={name}>{name}</option>)}</select>
+        <textarea name="problem" placeholder="What is the problem?" required />
+        <input name="serialNo" placeholder="Serial, if you can see it" />
+        <label className="stack">Photos<input name="photos" type="file" accept="image/*" multiple /></label>
+        <label className="stack">{captcha?.question ?? "Captcha"}<input name="captchaAnswer" required placeholder="Answer" /></label>
         <button className="btn">Submit</button>
       </form>
-      {ticket && <div className="banner">Booked. Your Comp. No is <b className="mono">{ticket}</b>. Track it with your mobile.</div>}
+      <p className="muted">Embed on oswalpumps.com with an iframe pointed at /book. The API is POST /api/public/book after the OTP and captcha.</p>
+      {ticket && <div className="banner">Your Comp. No is <b className="mono">{ticket}</b>.</div>}
       {error && <div className="banner bad">{error}</div>}
     </main>
   );

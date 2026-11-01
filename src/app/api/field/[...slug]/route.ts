@@ -1,0 +1,56 @@
+import { getScope } from "@/server/auth";
+import { fail, json, readJson } from "@/server/http";
+import { checkIn, earnings, fieldClose, issueCloseOtp, punch, todayVisits } from "@/server/field";
+import { updateComplaint } from "@/server/complaints";
+import { prisma } from "@/server/db";
+
+async function actor() {
+  const { user } = await getScope();
+  return user;
+}
+
+export async function GET(_req: Request, context: { params: Promise<{ slug: string[] }> }) {
+  try {
+    const user = await actor();
+    if (!user) return json({ error: "Sign in" }, 401);
+    const { slug } = await context.params;
+    if (slug[0] === "today") return json({ visits: await todayVisits(user) });
+    if (slug[0] === "earnings") return json(await earnings(user));
+    if (slug[0] === "parts") return json({ parts: await prisma.sparePart.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 200 }) });
+    if (slug[0] === "attendance") {
+      const rows = user.engineerId
+        ? await prisma.attendancePunch.findMany({ where: { engineerId: user.engineerId }, orderBy: { at: "desc" }, take: 30 })
+        : [];
+      return json({ rows });
+    }
+    return json({ error: "Not found" }, 404);
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function POST(req: Request, context: { params: Promise<{ slug: string[] }> }) {
+  try {
+    const user = await actor();
+    if (!user) return json({ error: "Sign in" }, 401);
+    const { slug } = await context.params;
+    const body = await readJson(req);
+    if (slug[0] === "checkin") return json(await checkIn(user, String(body.complaintId), body.kind === "ARRIVE" ? "ARRIVE" : "START", body.lat, body.lng));
+    if (slug[0] === "otp") return json(await issueCloseOtp(user, String(body.complaintId)));
+    if (slug[0] === "close") return json(await fieldClose(user, String(body.complaintId), body));
+    if (slug[0] === "hold") {
+      const complaint = await prisma.complaint.findUnique({ where: { id: String(body.complaintId) } });
+      if (!complaint) return json({ error: "Visit not found" }, 404);
+      return json(await updateComplaint(user, complaint.companyId, complaint.id, { action: "hold", holdReason: body.reason }));
+    }
+    if (slug[0] === "punch") return json(await punch(user, body.kind === "OUT" ? "OUT" : "IN", body.lat, body.lng));
+    if (slug[0] === "ping") {
+      if (!user.engineerId) return json({ error: "Technician login required" }, 403);
+      await prisma.techPing.create({ data: { engineerId: user.engineerId, lat: Number(body.lat), lng: Number(body.lng) } });
+      return json({ ok: true });
+    }
+    return json({ error: "Not found" }, 404);
+  } catch (error) {
+    return fail(error);
+  }
+}

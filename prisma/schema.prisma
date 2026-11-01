@@ -311,6 +311,8 @@ model Engineer {
   districtId String?
   pincodes   String      @default("")
   skills       String   @default("")
+  homeLat    Float?
+  homeLng    Float?
   active       Boolean  @default(true)
   employeeCode String?  @unique
   mergedIntoId String?
@@ -321,6 +323,8 @@ model Engineer {
   district   District?   @relation(fields: [districtId], references: [id], onDelete: SetNull)
   login      User?
   complaints Complaint[]
+  locations  TechPing[]
+  punches    AttendancePunch[]
 
   @@index([companyId, active])
   @@index([districtId])
@@ -507,6 +511,8 @@ model Complaint {
   repeatWindow      Int?
   assetId           String?
   assignReason      String?
+  lat               Float?
+  lng               Float?
   escalationLevel   Int       @default(0)
   escalatedToId     String?
   escalatedAt       DateTime?
@@ -530,6 +536,9 @@ model Complaint {
   escalatedTo User?           @relation("EscalatedComplaints", fields: [escalatedToId], references: [id], onDelete: SetNull)
 
   events      ComplaintEvent[]
+  visits      VisitCheck[]
+  media       FieldMedia[]
+  calls       CallLog[]
   notes       ComplaintNote[]
   attachments Attachment[]
   checks          ComplaintCheck[]
@@ -805,4 +814,78 @@ model OtpChallenge {
 model AppSetting {
   key   String @id
   value String
+}
+
+model WhatsAppOptOut {
+  phoneNorm String   @id
+  at        DateTime @default(now())
+  source    String?
+}
+
+model TechPing {
+  id         String   @id @default(cuid())
+  engineerId String
+  lat        Float
+  lng        Float
+  at         DateTime @default(now())
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, at])
+}
+
+model VisitCheck {
+  id          String    @id @default(cuid())
+  complaintId String
+  engineerId  String?
+  kind        String
+  lat         Float?
+  lng         Float?
+  at          DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, at])
+}
+
+model FieldMedia {
+  id          String    @id @default(cuid())
+  complaintId String
+  kind        String
+  note        String?
+  path        String
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, kind])
+}
+
+model AttendancePunch {
+  id         String   @id @default(cuid())
+  engineerId String
+  kind       String
+  lat        Float?
+  lng        Float?
+  at         DateTime @default(now())
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, at])
+}
+
+model SparePart {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  sku    String?
+  active Boolean @default(true)
+}
+
+model CallLog {
+  id          String    @id @default(cuid())
+  phone       String
+  complaintId String?
+  direction   String    @default("IN")
+  note        String?
+  at          DateTime  @default(now())
+  complaint   Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+
+  @@index([phone, at])
+  @@index([complaintId])
 }

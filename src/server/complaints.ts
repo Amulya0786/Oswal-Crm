@@ -5,6 +5,7 @@ import { nextTicketNo, rememberTicket } from "./ticket-seq";
 import { canSee } from "./scope";
 import { suggestTechnicians } from "./assignment";
 import { notifyComplaint, queueWebhook } from "./notify";
+import { notifyWhatsAppEvent } from "./whatsapp";
 import { bookingConflicts, type BookingRow } from "@/lib/duplicates";
 import { ensureAsset, ensureCustomer, findCustomer, relinkAsset } from "./link";
 import { resolveSerial, validateSerial, channelFor } from "@/lib/quality";
@@ -320,6 +321,17 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     });
   }
   queueWebhook("complaint.created", { ticketNo: created.ticketNo, status: created.status, companyId: company.id, callType: created.callType }, company.id);
+  const vars = {
+    ticketNo: created.ticketNo,
+    customerName: created.customerName,
+    engineer: created.assignedName ?? "",
+    engineerPhone: engineer?.phone ?? "",
+    scheduleDate: created.scheduleDate ? formatDay(created.scheduleDate) : "soon",
+    link: `${process.env.APP_URL ?? "http://localhost:3000"}/track?ticket=${created.ticketNo}`,
+    otp: "",
+  };
+  await notifyWhatsAppEvent("REGISTERED", { phone: created.phone, companyId: company.id, complaintId: created.id, vars });
+  if (created.engineerId) await notifyWhatsAppEvent("ASSIGNED", { phone: created.phone, companyId: company.id, complaintId: created.id, vars });
   return created;
 }
 
@@ -573,6 +585,12 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     message = `Visit scheduled ${formatDay(input.scheduleDate)}`;
     notifyEvent = "VISIT";
     type = "VISIT";
+    await notifyWhatsAppEvent("RESCHEDULED", {
+      phone: current.phone,
+      companyId: current.companyId,
+      complaintId: current.id,
+      vars: { ticketNo: current.ticketNo, customerName: current.customerName, scheduleDate: formatDay(input.scheduleDate), engineer: current.assignedName ?? "", engineerPhone: "", link: "", otp: "" },
+    });
   } else if (input.action === "priority") {
     if (!user.caps.assign && user.role !== "ADMIN") throw new HttpError(403, "You cannot change priority");
     if (!input.priority) throw new HttpError(400, "Choose a priority");
