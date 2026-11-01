@@ -1,0 +1,466 @@
+// Phase 1 uses SQLite so the desk runs with no extra services.
+// Postgres: set provider to "postgresql", point DATABASE_URL at Postgres,
+// then run `npx prisma db push` (or generate a SQL migration).
+// The models use only portable types (no native enums or arrays).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  employeeCode   String   @unique
+  name           String
+  email          String   @unique
+  phone          String?
+  passwordHash   String
+  role           String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stateAccess         UserStateAccess[]
+  districtAccess      UserDistrictAccess[]
+  brandAccess         UserBrandAccess[]
+  serviceCenters      ServiceCenter[]
+  events              ComplaintEvent[]
+  assignedComplaints  Complaint[]          @relation("AssignedComplaints")
+  createdComplaints   Complaint[]          @relation("CreatedComplaints")
+  escalationsReceived EscalationLog[]
+  auditLogs           AuditLog[]
+}
+
+model UserStateAccess {
+  userId  String
+  stateId String
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state   State @relation(fields: [stateId], references: [id], onDelete: Cascade)
+
+  @@id([userId, stateId])
+}
+
+model UserDistrictAccess {
+  userId     String
+  districtId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@id([userId, districtId])
+}
+
+model UserBrandAccess {
+  userId  String
+  brandId String
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand   Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([userId, brandId])
+}
+
+model State {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  code          String          @unique
+  districts     District[]
+  access        UserStateAccess[]
+  customers     Customer[]
+  complaints    Complaint[]
+  centers       ServiceCenter[]
+  pincodes      Pincode[]
+  beneficiaries Beneficiary[]
+}
+
+model District {
+  id            String               @id @default(cuid())
+  name          String
+  stateId       String
+  state         State                @relation(fields: [stateId], references: [id])
+  areas         Area[]
+  customers     Customer[]
+  complaints    Complaint[]
+  centers       ServiceCenter[]
+  pincodes      Pincode[]
+  access        UserDistrictAccess[]
+  beneficiaries Beneficiary[]
+
+  @@unique([stateId, name])
+}
+
+model Area {
+  id         String      @id @default(cuid())
+  name       String
+  districtId String
+  district   District    @relation(fields: [districtId], references: [id])
+  pincodes   Pincode[]
+  customers  Customer[]
+  complaints Complaint[]
+
+  @@unique([districtId, name])
+}
+
+model Pincode {
+  id              String         @id @default(cuid())
+  code            String         @unique
+  areaId          String?
+  area            Area?          @relation(fields: [areaId], references: [id])
+  districtId      String
+  district        District       @relation(fields: [districtId], references: [id])
+  stateId         String
+  state           State          @relation(fields: [stateId], references: [id])
+  serviceCenterId String?
+  serviceCenter   ServiceCenter? @relation(fields: [serviceCenterId], references: [id])
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+}
+
+model HsnCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  description String?
+  gstRate     Float     @default(18)
+  products    Product[]
+}
+
+model Brand {
+  id         String           @id @default(cuid())
+  name       String           @unique
+  code       String           @unique
+  products   Product[]
+  complaints Complaint[]
+  access     UserBrandAccess[]
+}
+
+model HpCapacity {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  hp       Float
+  products Product[]
+}
+
+model PumpHead {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  metres   Int
+  products Product[]
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  sku            String       @unique
+  name           String
+  family         String
+  categoryId     String?
+  category       Category?    @relation(fields: [categoryId], references: [id])
+  brandId        String?
+  brand          Brand?       @relation(fields: [brandId], references: [id])
+  hsnId          String?
+  hsn            HsnCode?     @relation(fields: [hsnId], references: [id])
+  hpCapacityId   String?
+  hpCapacity     HpCapacity?  @relation(fields: [hpCapacityId], references: [id])
+  pumpHeadId     String?
+  pumpHead       PumpHead?    @relation(fields: [pumpHeadId], references: [id])
+  warrantyMonths Int          @default(12)
+  active         Boolean      @default(true)
+  assets         InstalledAsset[]
+  complaints     Complaint[]
+}
+
+model Customer {
+  id         String    @id @default(cuid())
+  name       String
+  phone      String
+  altPhone   String?
+  email      String?
+  address    String?
+  village    String?
+  stateId    String?
+  state      State?    @relation(fields: [stateId], references: [id])
+  districtId String?
+  district   District? @relation(fields: [districtId], references: [id])
+  areaId     String?
+  area       Area?     @relation(fields: [areaId], references: [id])
+  pincode    String?
+  searchText String    @default("")
+  createdAt  DateTime  @default(now())
+  assets     InstalledAsset[]
+  complaints Complaint[]
+
+  @@index([phone])
+}
+
+model InstalledAsset {
+  id           String     @id @default(cuid())
+  serialNumber String     @unique
+  customerId   String
+  customer     Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product?   @relation(fields: [productId], references: [id])
+  installedOn  DateTime?
+  complaints   Complaint[]
+}
+
+model ServiceCenter {
+  id           String     @id @default(cuid())
+  code         String     @unique
+  name         String
+  engineerName String
+  phone        String?
+  email        String?
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id])
+  stateId      String?
+  state        State?     @relation(fields: [stateId], references: [id])
+  districtId   String?
+  district     District?  @relation(fields: [districtId], references: [id])
+  active       Boolean    @default(true)
+  isDefault    Boolean    @default(false)
+  pincodes     Pincode[]
+  complaints   Complaint[]
+}
+
+model ExpenseType {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  code   String  @unique
+  active Boolean @default(true)
+}
+
+model ComplaintIssue {
+  id            String      @id @default(cuid())
+  name          String      @unique
+  complaintType String?
+  active        Boolean     @default(true)
+  complaints    Complaint[]
+}
+
+model ComplaintSource {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  code   String  @unique
+  active Boolean @default(true)
+}
+
+model HoldStatus {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  code       String      @unique
+  active     Boolean     @default(true)
+  complaints Complaint[]
+}
+
+model CheckListItem {
+  id            String  @id @default(cuid())
+  name          String
+  complaintType String?
+  sortOrder     Int     @default(0)
+  active        Boolean @default(true)
+}
+
+model ActualProblem {
+  id         String           @id @default(cuid())
+  name       String           @unique
+  active     Boolean          @default(true)
+  solutions  ActualSolution[]
+  complaints Complaint[]
+}
+
+model ActualSolution {
+  id         String         @id @default(cuid())
+  name       String
+  problemId  String?
+  problem    ActualProblem? @relation(fields: [problemId], references: [id])
+  active     Boolean        @default(true)
+  complaints Complaint[]
+}
+
+model Beneficiary {
+  id             String    @id @default(cuid())
+  name           String
+  phone          String?
+  consumerNumber String?
+  scheme         String
+  stateId        String?
+  state          State?    @relation(fields: [stateId], references: [id])
+  districtId     String?
+  district       District? @relation(fields: [districtId], references: [id])
+  village        String?
+  pumpSerial     String?
+  capacity       String?
+  createdAt      DateTime  @default(now())
+}
+
+model SlaPolicy {
+  id                      String  @id @default(cuid())
+  complaintType           String  @unique
+  responseHours           Int
+  closeHours              Int
+  escalationCooldownHours Int     @default(12)
+  active                  Boolean @default(true)
+}
+
+model Complaint {
+  id               String          @id @default(cuid())
+  ticketSeq        Int             @unique
+  ticketNumber     String          @unique
+  externalRef      String?         @unique
+  status           String
+  type             String
+  source           String
+  priority         String          @default("NORMAL")
+  customerId       String
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  productId        String?
+  product          Product?        @relation(fields: [productId], references: [id])
+  assetId          String?
+  asset            InstalledAsset? @relation(fields: [assetId], references: [id])
+  serialNumber     String?
+  brandId          String?
+  brand            Brand?          @relation(fields: [brandId], references: [id])
+  issueId          String?
+  issue            ComplaintIssue? @relation(fields: [issueId], references: [id])
+  description      String?
+  stateId          String?
+  state            State?          @relation(fields: [stateId], references: [id])
+  districtId       String?
+  district         District?       @relation(fields: [districtId], references: [id])
+  areaId           String?
+  area             Area?           @relation(fields: [areaId], references: [id])
+  pincode          String?
+  address          String?
+  serviceCenterId  String?
+  serviceCenter    ServiceCenter?  @relation(fields: [serviceCenterId], references: [id])
+  assignedToUserId String?
+  assignedTo       User?           @relation("AssignedComplaints", fields: [assignedToUserId], references: [id])
+  assignedAt       DateTime?
+  holdStatusId     String?
+  holdStatus       HoldStatus?     @relation(fields: [holdStatusId], references: [id])
+  holdReason       String?
+  heldAt           DateTime?
+  actualProblemId  String?
+  actualProblem    ActualProblem?  @relation(fields: [actualProblemId], references: [id])
+  actualSolutionId String?
+  actualSolution   ActualSolution? @relation(fields: [actualSolutionId], references: [id])
+  closeNotes       String?
+  closedAt         DateTime?
+  cancelReason     String?
+  cancelledAt      DateTime?
+  happyRating      Int?
+  happyNotes       String?
+  happyAt          DateTime?
+  scheme           String?
+  consumerNumber   String?
+  checklistJson    String?
+  feedbackToken    String          @unique
+  escalationLevel  Int             @default(0)
+  escalatedToUserId String?
+  lastEscalatedAt  DateTime?
+  slaResponseDue   DateTime?
+  slaCloseDue      DateTime?
+  firstResponseAt  DateTime?
+  responseBreached Boolean         @default(false)
+  closeBreached    Boolean         @default(false)
+  searchText       String          @default("")
+  createdById      String?
+  createdBy        User?           @relation("CreatedComplaints", fields: [createdById], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  events        ComplaintEvent[]
+  attachments   Attachment[]
+  escalations   EscalationLog[]
+  notifications NotificationLog[]
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@index([stateId])
+  @@index([districtId])
+  @@index([assignedToUserId])
+}
+
+model ComplaintEvent {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  type        String
+  message     String
+  meta        String?
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId, createdAt])
+}
+
+model Attachment {
+  id           String    @id @default(cuid())
+  complaintId  String
+  complaint    Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String?
+  size         Int
+  data         Bytes
+  uploadedById String?
+  createdAt    DateTime  @default(now())
+}
+
+model EscalationLog {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  fromLevel   Int
+  toLevel     Int
+  toRole      String
+  toUserId    String?
+  toUser      User?     @relation(fields: [toUserId], references: [id])
+  reason      String
+  createdAt   DateTime  @default(now())
+}
+
+model NotificationTemplate {
+  id      String  @id @default(cuid())
+  event   String
+  channel String
+  subject String?
+  body    String
+  active  Boolean @default(true)
+
+  @@unique([event, channel])
+}
+
+model NotificationLog {
+  id          String     @id @default(cuid())
+  complaintId String?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id])
+  event       String
+  channel     String
+  toAddress   String
+  subject     String?
+  body        String
+  provider    String
+  status      String
+  detail      String?
+  createdAt   DateTime   @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String?
+  action    String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  changes   String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}

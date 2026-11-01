@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-canvas text-ink antialiased;
+  font-family: var(--font-body), "Source Sans 3", sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display), Outfit, sans-serif;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-50;
+}
+
+.btn-accent {
+  @apply bg-accent text-white hover:bg-accent-dark;
+}
+
+.btn-navy {
+  @apply bg-navy text-white hover:bg-navy-700;
+}
+
+.btn-ghost {
+  @apply bg-white text-navy ring-1 ring-line hover:bg-slate-50;
+}
+
+.btn-danger {
+  @apply bg-rose-600 text-white hover:bg-rose-700;
+}
+
+.field {
+  @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none ring-accent/20 placeholder:text-slate-400 focus:border-accent focus:ring-4;
+}
+
+.label {
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-muted;
+}
+
+.card {
+  @apply rounded-2xl bg-white shadow-card ring-1 ring-black/[0.04];
+}
+
+.stripe {
+  background-image: repeating-linear-gradient(-18deg, transparent, transparent 12px, rgba(11, 31, 58, 0.028) 12px, rgba(11, 31, 58, 0.028) 13px);
+}
+
+table.data {
+  @apply w-full border-collapse text-sm;
+}
+
+table.data th {
+  @apply bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted;
+}
+
+table.data td {
+  @apply border-t border-line px-3 py-2.5 align-middle;
+}
+
+table.data tr:hover td {
+  @apply bg-slate-50/80;
+}
+
+.badge {
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1;
+}
