@@ -84,6 +84,11 @@ export default function FieldPage() {
           <button className="btn line" onClick={() => void send("/api/field/punch", { kind: "OUT" })}>{copy.out}</button>
         </div>
       </section>
+      <section className="panel stack">
+        <h2>{lang === "hi" ? "बंद करने के प्रमाण" : "Closing proof"}</h2>
+        <p className="muted">{lang === "hi" ? "फोटो, हस्ताक्षर या OTP, और GPS ज़रूरी हैं। दूर का पिन चिह्नित होता है।" : "A close needs a site photo, a signature or the customer OTP, and GPS. A pin far from the customer is flagged."}</p>
+        <canvas aria-label="Signature" width={320} height={90} style={{ width: "100%", background: "#fff", borderRadius: 12, border: "1px solid #d5e4db" }} />
+      </section>
       <section className="panel">
         <h2>{copy.earnings}</h2>
         <p>{copy.visits}: <b>{earnings?.visits ?? 0}</b></p>

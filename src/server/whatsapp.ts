@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { normalizePhone } from "@/lib/mask";
 import { allowSend, classifyInbound, renderWhatsApp, statusReply, type Lang, type WhatsAppEvent } from "@/lib/phase2";
+import { parseRating, ratingNeedsEscalation } from "@/lib/phase3";
 import { labelOf, STATUSES } from "@/lib/labels";
 
 export function whatsAppMode(): "meta" | "bsp" | "log" {
@@ -120,8 +121,39 @@ export async function notifyWhatsAppEvent(event: WhatsAppEvent, input: {
 export async function handleWhatsAppWebhook(payload: unknown) {
   const message = extractInbound(payload);
   if (!message) return { ok: true, ignored: true };
-  const kind = classifyInbound(message.text);
   const phone = normalizePhone(message.from);
+  const rating = parseRating(message.text);
+  if (rating) {
+    const openFeedback = await prisma.complaint.findFirst({
+      where: { phone, feedbackPending: true },
+      orderBy: { closedAt: "desc" },
+    });
+    if (openFeedback) {
+      await prisma.complaint.update({
+        where: { id: openFeedback.id },
+        data: {
+          happyRating: rating.rating,
+          happyRemarks: rating.comment || openFeedback.happyRemarks,
+          happyAt: new Date(),
+          feedbackPending: false,
+          status: openFeedback.status === "CLOSED" ? "HAPPY_CALLING" : openFeedback.status,
+          finalStatus: "Happy Calling Done",
+        },
+      });
+      await prisma.complaintEvent.create({
+        data: { complaintId: openFeedback.id, type: "HAPPY", actorName: "WhatsApp", message: `Feedback ${rating.rating}/5${rating.comment ? ` · ${rating.comment}` : ""}` },
+      });
+      if (ratingNeedsEscalation(rating.rating)) {
+        const manager = await prisma.user.findFirst({ where: { role: { in: ["AREA_MANAGER", "STATE_HEAD", "ADMIN"] }, active: true }, orderBy: { role: "asc" } });
+        await prisma.escalationLog.create({
+          data: { complaintId: openFeedback.id, fromLevel: openFeedback.escalationLevel, toLevel: openFeedback.escalationLevel + 1, toUserId: manager?.id, toName: manager?.name ?? "Service manager", message: `Low feedback ${rating.rating}/5 on ${openFeedback.ticketNo}` },
+        });
+        await prisma.complaint.update({ where: { id: openFeedback.id }, data: { escalationLevel: { increment: 1 }, escalatedToId: manager?.id, escalatedAt: new Date() } });
+      }
+      return { ok: true, rating: rating.rating, ticketNo: openFeedback.ticketNo };
+    }
+  }
+  const kind = classifyInbound(message.text);
   if (kind.kind === "optout") {
     await prisma.whatsAppOptOut.upsert({ where: { phoneNorm: phone }, create: { phoneNorm: phone, source: "whatsapp" }, update: { at: new Date() } });
     return { ok: true, optout: true };

@@ -7,6 +7,7 @@ import { DetailActions } from "@/components/detail-actions";
 import { labelOf, CALL_TYPES, STATUSES, PRIORITIES, statusClass } from "@/lib/labels";
 import { ageDays, formatDay, formatWhen } from "@/lib/time";
 import { coverStatus } from "@/lib/history";
+import { VoiceBox } from "@/components/voice-box";
 
 export const metadata = { title: "Complaint" };
 
@@ -65,6 +66,7 @@ export default async function ComplaintDetail({ params, searchParams }: { params
           <DetailActions complaint={{ id: complaint.id, status: complaint.status }} engineers={engineers} problems={problems} solutions={solutions} checks={checks} can={user.caps} />
         </section>
       </div>
+      <VoiceBox complaintId={complaint.id} />
       <section className="panel" style={{ marginTop: 12 }}>
         <h2>This ticket</h2>
         <ul className="timeline">

@@ -68,3 +68,16 @@ Technician app: `/field` (installable PWA). Visits, GPS check-in, attendance and
 Telephony is a stub. `/calls` looks up a caller by mobile and writes a call on the ticket. No PBX is attached.
 
 Info@ email booking, Business Central and the dealer portal are not in this phase.
+
+## Phase 3
+
+These stay in log or mock mode until the key is set. Nothing is sent to a real model or a speech service without one.
+
+| Key | Used for |
+| --- | --- |
+| WhatsApp keys from Phase 2 | Rating message after a close. The customer replies `1` to `5` and an optional comment. A score of 2 or less is escalated. Happy calling on the desk remains for customers who are not on WhatsApp. |
+| `GPS_MAX_KM` | How far a closing pin may be from the customer pin before it is flagged. Default 15. Proof rules per call type are saved in the app. |
+| `SPEECH_URL`, `SPEECH_KEY` | Speech to text for voice notes, including Hindi. Without them the transcript is a mock line and the audio is stored on local disk (`STORAGE_DIR` or `data/uploads`). |
+| `AI_API_KEY` | Booking hints, fix steps, the daily management note, plain-language questions, SLA risk wording, and timeline summaries. Without it those answers are a local mock. |
+
+`STORAGE_DIR` is the object-storage stand-in. Development writes files to disk.

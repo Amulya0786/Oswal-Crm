@@ -513,6 +513,12 @@ model Complaint {
   assignReason      String?
   lat               Float?
   lng               Float?
+  feedbackPending   Boolean   @default(false)
+  closeLat          Float?
+  closeLng          Float?
+  closeDistanceKm   Float?
+  gpsFar            Boolean   @default(false)
+  aiSummary         String?
   escalationLevel   Int       @default(0)
   escalatedToId     String?
   escalatedAt       DateTime?
@@ -539,6 +545,7 @@ model Complaint {
   visits      VisitCheck[]
   media       FieldMedia[]
   calls       CallLog[]
+  voiceNotes  VoiceNote[]
   notes       ComplaintNote[]
   attachments Attachment[]
   checks          ComplaintCheck[]
@@ -875,6 +882,28 @@ model SparePart {
   name   String  @unique
   sku    String?
   active Boolean @default(true)
+}
+
+model VoiceNote {
+  id          String    @id @default(cuid())
+  complaintId String
+  actorId     String?
+  lang        String    @default("en")
+  path        String
+  transcript  String
+  provider    String    @default("mock")
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+}
+
+model ProofRule {
+  callType       String  @id
+  requirePhoto   Boolean @default(true)
+  requireIdentity Boolean @default(true)
+  requireGps     Boolean @default(true)
+  maxKm          Float   @default(15)
 }
 
 model CallLog {

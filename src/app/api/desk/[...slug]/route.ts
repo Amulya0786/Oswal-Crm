@@ -15,6 +15,9 @@ import { classifyDuplicates } from "@/lib/duplicates";
 import { findCustomer, loadCustomerHistory, mergeCustomers } from "@/server/link";
 import { telephony } from "@/server/telephony";
 import { loadScorecards, scorecardPdf, scorecardWorkbook } from "@/server/scorecard";
+import { askTickets, bookingHint, dailyAiSummary, fixHints, summariseComplaint } from "@/server/ai";
+import { storeAudio, transcribe } from "@/server/speech";
+import { DEFAULT_SLABS, DEFAULT_WEIGHTS, incentiveFor, performanceScore } from "@/lib/phase3";
 import { normalizePhone, displayPhone } from "@/lib/mask";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 
@@ -65,6 +68,62 @@ async function route(method: string, slug: string[], req: Request) {
   const [head, id, extra] = slug;
 
   if (method === "GET" && head === "live") return json({ version: await getVersion() });
+
+  if (method === "GET" && head === "performance") {
+    const engineers = await prisma.engineer.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 200 });
+    const rows = [];
+    for (const engineer of engineers) {
+      const [assigned, closures, repeats, reopened, proofOk, feedback] = await Promise.all([
+        prisma.complaint.count({ where: { engineerId: engineer.id, excludeFromMis: false } }),
+        prisma.complaint.count({ where: { engineerId: engineer.id, status: { in: ["CLOSED", "HAPPY_CALLING"] }, excludeFromMis: false } }),
+        prisma.complaint.count({ where: { engineerId: engineer.id, repeatWindow: 30, excludeFromMis: false } }),
+        prisma.complaint.count({ where: { engineerId: engineer.id, repeatWindow: 30, excludeFromMis: false, closedAt: { not: null } } }),
+        prisma.complaint.count({ where: { engineerId: engineer.id, status: { in: ["CLOSED", "HAPPY_CALLING"] }, gpsFar: false, feedbackPending: false } }),
+        prisma.complaint.aggregate({ where: { engineerId: engineer.id, happyRating: { not: null } }, _avg: { happyRating: true } }),
+      ]);
+      const scored = performanceScore({
+        closures, assigned, tatHours: null, slaHours: 48, repeats, feedback: feedback._avg.happyRating, proofOk, closed: closures, reopened,
+      });
+      rows.push({ name: engineer.name, closures, score: scored.score, incentive: incentiveFor(scored.score, DEFAULT_SLABS), ...scored.parts });
+    }
+    rows.sort((a, b) => b.score - a.score);
+    return json({ rows, weights: DEFAULT_WEIGHTS, slabs: DEFAULT_SLABS });
+  }
+
+  if (method === "GET" && head === "proof") return json({ rules: await prisma.proofRule.findMany() });
+  if (method === "POST" && head === "proof") {
+    if (!user.caps.settings) return json({ error: "Admins only" }, 403);
+    const body = await readJson(req);
+    const saved = await prisma.proofRule.upsert({
+      where: { callType: String(body.callType) },
+      create: { callType: String(body.callType), requirePhoto: Boolean(body.requirePhoto), requireIdentity: Boolean(body.requireIdentity), requireGps: Boolean(body.requireGps), maxKm: Number(body.maxKm ?? 15) },
+      update: { requirePhoto: Boolean(body.requirePhoto), requireIdentity: Boolean(body.requireIdentity), requireGps: Boolean(body.requireGps), maxKm: Number(body.maxKm ?? 15) },
+    });
+    return json(saved);
+  }
+
+  if (method === "GET" && head === "assist") return json(await dailyAiSummary());
+  if (method === "POST" && head === "assist") {
+    const body = await readJson(req);
+    if (body.kind === "book") return json(await bookingHint(String(body.text ?? ""), body.phone ? String(body.phone) : null));
+    if (body.kind === "fix") return json(await fixHints(String(body.text ?? "")));
+    if (body.kind === "ask") return json(await askTickets(String(body.text ?? "")));
+    if (body.kind === "summary" && body.complaintId) return json(await summariseComplaint(String(body.complaintId)));
+    return json(await dailyAiSummary());
+  }
+  if (method === "POST" && head === "voice") {
+    const body = await readJson(req);
+    const lang = body.lang === "hi" ? "hi" : "en";
+    const file = await storeAudio(String(body.complaintId), String(body.audio ?? ""));
+    const speech = await transcribe(lang);
+    const note = await prisma.voiceNote.create({
+      data: { complaintId: String(body.complaintId), actorId: user.id, lang, path: file, transcript: speech.text, provider: speech.provider },
+    });
+    await prisma.complaintEvent.create({
+      data: { complaintId: note.complaintId, actorId: user.id, actorName: user.name, type: "NOTE", message: `Voice note (${lang}): ${speech.text}` },
+    });
+    return json(note);
+  }
 
   if (method === "GET" && head === "map") {
     const company = scope === "all" ? {} : { companyId: scope };

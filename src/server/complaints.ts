@@ -547,6 +547,7 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     data.actualSolutionId = solution.id;
     data.actualSolution = solution.text;
     data.slaBreached = current.slaDueAt ? current.slaDueAt <= now : false;
+    data.feedbackPending = true;
     message = `Closed. ${problem.text} / ${solution.text}`;
     notifyEvent = "CLOSING";
   } else if (input.action === "happy") {
@@ -668,6 +669,12 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
         customerName: current.customerName,
         phone: current.phone,
         status: updated.status,
+      });
+      await notifyWhatsAppEvent("FEEDBACK", {
+        phone: current.phone,
+        companyId: current.companyId,
+        complaintId: current.id,
+        vars: { ticketNo: current.ticketNo, customerName: current.customerName, engineer: updated.assignedName ?? "", engineerPhone: "", scheduleDate: "", link: "", otp: "" },
       });
     }
   }

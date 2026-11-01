@@ -7,6 +7,7 @@ export const WHATSAPP_EVENTS = [
   "RESCHEDULED",
   "CLOSE_OTP",
   "CLOSED_FEEDBACK",
+  "FEEDBACK",
   "SLA_APOLOGY",
 ] as const;
 
@@ -33,6 +34,10 @@ const COPY: Record<WhatsAppEvent, Record<Lang, string>> = {
   CLOSED_FEEDBACK: {
     en: "Oswal: {{ticketNo}} is closed. Please rate the visit: {{link}}",
     hi: "ओसवाल: {{ticketNo}} बंद हो गई है। कृपया विज़िट का मूल्यांकन करें: {{link}}",
+  },
+  FEEDBACK: {
+    en: "Oswal: {{ticketNo}} is closed. Reply with 1 to 5, and a comment if you want. Example: 4 Working well. A desk agent can still call you.",
+    hi: "ओसवाल: {{ticketNo}} बंद हो गई है। 1 से 5 का उत्तर दें और चाहें तो टिप्पणी लिखें। उदाहरण: 4 अच्छा काम। कॉल सेंटर भी फोन कर सकता है।",
   },
   SLA_APOLOGY: {
     en: "Oswal: sorry, {{ticketNo}} is taking longer than promised. We are chasing it and will update you.",

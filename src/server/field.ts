@@ -4,6 +4,7 @@ import { prisma } from "./db";
 import { HttpError } from "./http";
 import { updateComplaint } from "./complaints";
 import { notifyWhatsAppEvent } from "./whatsapp";
+import { DEFAULT_PROOF, validateProof } from "@/lib/phase3";
 import type { SessionUser } from "@/lib/types";
 import { kolkataYmd } from "@/lib/time";
 
@@ -83,28 +84,47 @@ function whatsAppConfigured() {
 }
 
 export async function fieldClose(user: SessionUser, complaintId: string, input: {
-  otp: string;
+  otp?: string | null;
   problemText?: string | null;
   solutionText?: string | null;
   serialNo?: string | null;
   nameplate?: string | null;
   before?: string | null;
   after?: string | null;
+  site?: string | null;
   signature?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   spares?: { partId?: string | null; name?: string | null; qty?: number }[];
 }) {
   const engineerId = requireTech(user);
   const complaint = await prisma.complaint.findFirst({ where: { id: complaintId, engineerId } });
   if (!complaint) throw new HttpError(404, "That visit is not on your list");
-  const challenge = await prisma.otpChallenge.findFirst({
-    where: { phone: complaint.phone, ticketNo: complaint.ticketNo, purpose: "CLOSE", used: false, expiresAt: { gt: new Date() } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!challenge || challenge.code !== String(input.otp)) throw new HttpError(401, "Customer OTP is wrong or expired");
-  await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { used: true } });
+  const rule = await prisma.proofRule.findUnique({ where: { callType: complaint.callType } });
+  const policy = rule ? { requirePhoto: rule.requirePhoto, requireIdentity: rule.requireIdentity, requireGps: rule.requireGps, maxKm: rule.maxKm } : { ...DEFAULT_PROOF, maxKm: Number(process.env.GPS_MAX_KM ?? DEFAULT_PROOF.maxKm) };
+  const photos = [input.before, input.after, input.site, input.nameplate].filter(Boolean).length;
+  const proof = validateProof({
+    photos,
+    signature: Boolean(input.signature),
+    otp: Boolean(input.otp),
+    lat: input.lat,
+    lng: input.lng,
+    customerLat: complaint.lat,
+    customerLng: complaint.lng,
+  }, policy);
+  if (!proof.ok) throw new HttpError(400, `Closing needs ${proof.missing.join(", ")}`);
+  if (input.otp) {
+    const challenge = await prisma.otpChallenge.findFirst({
+      where: { phone: complaint.phone, ticketNo: complaint.ticketNo, purpose: "CLOSE", used: false, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!challenge || challenge.code !== String(input.otp)) throw new HttpError(401, "Customer OTP is wrong or expired");
+    await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { used: true } });
+  }
   if (input.nameplate) await saveMedia(complaintId, "NAMEPLATE", input.nameplate);
   await saveMedia(complaintId, "BEFORE", input.before);
   await saveMedia(complaintId, "AFTER", input.after);
+  await saveMedia(complaintId, "SITE", input.site, "Site photo");
   await saveMedia(complaintId, "SIGNATURE", input.signature, "Customer signature");
   for (const spare of input.spares ?? []) {
     const name = spare.name?.trim();
@@ -119,13 +139,15 @@ export async function fieldClose(user: SessionUser, complaintId: string, input: 
     serialNo: input.serialNo,
     nameplateCaptured: Boolean(input.nameplate),
   });
-  const link = `${process.env.APP_URL ?? "http://localhost:3000"}/track?ticket=${complaint.ticketNo}`;
-  await notifyWhatsAppEvent("CLOSED_FEEDBACK", {
-    phone: complaint.phone,
-    companyId: complaint.companyId,
-    complaintId,
-    vars: { ticketNo: complaint.ticketNo, customerName: complaint.customerName, link },
+  await prisma.complaint.update({
+    where: { id: complaintId },
+    data: { closeLat: input.lat ?? null, closeLng: input.lng ?? null, closeDistanceKm: proof.distanceKm, gpsFar: proof.gpsFar },
   });
+  if (proof.gpsFar) {
+    await prisma.complaintEvent.create({
+      data: { complaintId, actorName: user.name, type: "PROOF", message: `GPS is ${proof.distanceKm} km from the customer pin` },
+    });
+  }
   return closed;
 }
 

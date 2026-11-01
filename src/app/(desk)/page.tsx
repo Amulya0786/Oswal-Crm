@@ -19,6 +19,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const closedMonth = byKey("closed_month");
   const sections = [
     { id: "today", title: "Today", tiles: data.tiles.filter((tile) => tile.group === "today") },
+    { id: "feedback", title: "Feedback", tiles: data.tiles.filter((tile) => tile.group === "feedback") },
     { id: "pipeline", title: "Status pipeline", tiles: ["open", "assigned", "pending"].map((key) => byKey(key)).concat(closedMonth ? [{ ...closedMonth, label: "Closed", hint: "Closed this month" }] : []).concat(data.tiles.filter((tile) => tile.group === "pipeline" && !["open", "assigned", "pending"].includes(tile.key))).filter((tile): tile is NonNullable<typeof tile> => Boolean(tile)) },
     { id: "sla", title: "SLA and ageing", tiles: data.tiles.filter((tile) => tile.group === "age" || tile.group === "sla") },
     { id: "type", title: "By call type", tiles: data.tiles.filter((tile) => tile.group === "type") },

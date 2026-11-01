@@ -22,6 +22,9 @@ const GROUPS = [
     { href: "/reports", label: "Reports", icon: BarChart3 },
     { href: "/reports/scorecards", label: "Scorecards", icon: BarChart3 },
     { href: "/reports/daily", label: "Daily summary", icon: LineChart },
+    { href: "/assist", label: "Assist", icon: LineChart },
+    { href: "/performance", label: "Scores", icon: BarChart3 },
+    { href: "/feedback", label: "Feedback", icon: MessageCircle },
     { href: "/analytics", label: "Analytics", icon: LineChart },
   ] },
   { label: "Admin", items: [
@@ -44,6 +47,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [lang, setLang] = useState<"en" | "hi">("en");
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<{ complaints: { id: string; ticketNo: string; customerName: string; status: string }[]; customers: { id: string; name: string; phone: string }[]; engineers: { id: string; name: string }[] }>({ complaints: [], customers: [], engineers: [] });
   const current = user.companies.find((company) => company.id === scope);
@@ -64,6 +68,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("oswal-sidebar") === "collapsed");
+    const saved = window.localStorage.getItem("oswal-lang");
+    if (saved === "hi" || saved === "en") setLang(saved);
   }, []);
 
   useEffect(() => {
@@ -129,6 +135,12 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             {user.caps.allCompanies && <button className={scope === "all" ? "active" : ""} onClick={() => choose("all")}>All</button>}
           </div>
           <button className="search-btn" onClick={() => setOpen(true)}><Search size={16} /> Search <kbd>Ctrl K</kbd></button>
+          <button type="button" className="icon-btn" aria-label="Language" onClick={() => {
+            const next = lang === "hi" ? "en" : "hi";
+            setLang(next);
+            window.localStorage.setItem("oswal-lang", next);
+            document.documentElement.lang = next;
+          }}>{lang === "hi" ? "EN" : "हिंदी"}</button>
           <ThemeToggle />
           <span className="live-dot" title="Live" />
           <details className="user-menu">

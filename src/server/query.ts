@@ -204,7 +204,7 @@ export type Tile = {
   href: string;
   tone: string;
   hint: string;
-  group: "pipeline" | "type" | "month" | "today" | "age" | "sla";
+  group: "pipeline" | "type" | "month" | "today" | "age" | "sla" | "feedback";
 };
 
 export type SerialGap = { label: string; total: number; missing: number; percent: number };
@@ -283,7 +283,9 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
       COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" >= ${age815.gte} AND "bookDate" < ${age815.lt})::int AS age_8_15,
       COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" < ${age15})::int AS age_15p,
       COUNT(*) FILTER (WHERE status IN (${active}) AND "slaDueAt" IS NOT NULL AND "slaDueAt" <= ${now})::int AS breach,
-      COUNT(*) FILTER (WHERE ${risk})::int AS risk
+      COUNT(*) FILTER (WHERE ${risk})::int AS risk,
+      COUNT(*) FILTER (WHERE "feedbackPending" = true)::int AS feedback_pending,
+      COALESCE(ROUND(AVG("happyRating") FILTER (WHERE "happyRating" IS NOT NULL))::int, 0) AS feedback_score
     FROM "Complaint"
     WHERE ${where}
   `;
@@ -314,6 +316,8 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
     { key: "age_15p", group: "age", tone: "bad", label: "Over 15 days", value: num("age_15p"), hint: "Older than 15 days", href: tileHref(drill, { ageing: "15p" }) },
     { key: "breach", group: "sla", tone: "bad", label: "SLA breached", value: num("breach"), hint: "Past the promise time", href: tileHref(drill, { breach: "1" }) },
     { key: "risk", group: "sla", tone: "amber", label: "At risk", value: num("risk"), hint: "Likely to breach", href: tileHref(drill, { risk: "1" }) },
+    { key: "feedback_score", group: "feedback", tone: "good", label: "Feedback score", value: num("feedback_score"), hint: "Average of 1 to 5", href: "/performance" },
+    { key: "feedback_pending", group: "feedback", tone: "amber", label: "Pending feedback", value: num("feedback_pending"), hint: "Waiting on WhatsApp or a call", href: "/feedback" },
   ];
 
   const dim = dimension === "district" || dimension === "engineer" || dimension === "product" || dimension === "type" ? dimension : "state";
