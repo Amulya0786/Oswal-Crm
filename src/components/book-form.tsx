@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CALL_TYPES, PRIORITIES, SOURCES } from "@/lib/labels";
+import { CALL_TYPES, labelOf, PRIORITIES, SOURCES, STATUSES } from "@/lib/labels";
 import { SERIAL_UNAVAILABLE_REASONS } from "@/lib/quality";
+import { formatDay } from "@/lib/time";
 
 type Option = { id: string; name: string; stateId?: string; districtId?: string; companyId?: string; categoryId?: string | null; code?: string; companyCode?: string; type?: string; shortName?: string; accent?: string; legalName?: string };
 type Pin = { code: string; districtId: string; areaId: string | null };
@@ -33,6 +34,13 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
   const [assignMode, setAssignMode] = useState<"suggest" | "manual" | "none">("suggest");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [history, setHistory] = useState<null | {
+    customerId: string;
+    name: string;
+    assets: { id: string; label: string; warranty: string; amc: string }[];
+    complaints: { ticketNo: string; status: string; bookDate: string; technician: string | null; problem: string | null; resolution: string | null; spares: string[]; repeatOfTicket: string | null }[];
+  }>(null);
 
   const districts = (options.districts as Option[]).filter((row) => !stateId || row.stateId === stateId);
   const areas = (options.areas as Option[]).filter((row) => !districtId || row.districtId === districtId);
@@ -55,6 +63,8 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
       const response = await fetch(`/api/desk/lookup?phone=${phone}&serial=${encodeURIComponent(serial)}&companyId=${companyId}`);
       const body = await response.json();
       setCustomer(body.customers?.[0] ?? null);
+      setHistory(body.history ?? null);
+      if (body.history?.name) setCustomerName(body.history.name);
       setWarning(body.duplicates);
       if (body.customers?.[0]) {
         setStateId(body.customers[0].stateId ?? "");
@@ -163,16 +173,19 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
     router.refresh();
   }
 
+  const districtName = districts.find((row) => row.id === districtId)?.name;
+  const productName = products.find((row) => row.id === productId)?.name;
   return (
-    <form action={onSubmit} className="stack">
+    <form action={onSubmit} className="book-layout">
+      <div className="stack">
       <div className="chips">
         {companies.map((company) => (
           <button type="button" key={company.id} className={`chip ${companyId === company.id ? "on" : ""}`} onClick={() => setCompanyId(company.id)}>{company.shortName}</button>
         ))}
       </div>
       <p className="muted">Company follows the product category. Change it here if this call is an exception.</p>
-      <section className="panel stack">
-        <h2>Customer</h2>
+      <section className="panel stack form-section">
+        <header className="section-head"><span className="step">1</span><h2>Customer</h2></header>
         <div className="filters">
           <input name="phone" placeholder="Mobile" value={phone} onChange={(event) => setPhone(event.target.value)} required />
           <input name="serialNo" placeholder="Serial number, if you have it" value={serial} onChange={(event) => { setSerial(event.target.value); if (event.target.value.trim()) setSerialUnavailable(false); }} disabled={serialUnavailable} />
@@ -185,6 +198,25 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           </select>
         )}
         {customer && <p>Found {customer.name} · {customer.company?.shortName} · {customer.district?.name}</p>}
+        {phone.replace(/\D/g, "").length >= 10 && (
+          <div className="history-panel">
+            <div className="section-head"><h2>History for this mobile</h2>{history && <a href={`/customers/${history.customerId}`}>Customer 360</a>}</div>
+            {!history && <p className="muted">No earlier complaints for this mobile.</p>}
+            {history && (
+              <>
+                <p>{history.assets.length ? history.assets.map((asset) => <span key={asset.id}>{asset.label} · {asset.warranty} · {asset.amc}<br /></span>) : <span className="muted">No installed product on record. </span>}</p>
+                {!history.complaints.length && <p className="muted">No complaints yet.</p>}
+                {history.complaints.map((row) => (
+                  <p key={row.ticketNo}>
+                    <a className="mono" href={`/complaints/${row.ticketNo}`}>{row.ticketNo}</a>
+                    {" "}· {labelOf(STATUSES, row.status)} · {formatDay(row.bookDate)} · {row.technician ?? "Unassigned"}
+                    <span className="muted"> · {row.problem ?? "Problem not recorded"}{row.resolution ? ` · ${row.resolution}` : ""}{row.spares.length ? ` · Spares ${row.spares.join(", ")}` : ""}{row.repeatOfTicket ? ` · repeat of ${row.repeatOfTicket}` : ""}</span>
+                  </p>
+                ))}
+              </>
+            )}
+          </div>
+        )}
         {warning?.reason && (
           <div className="banner">
             {warning.reason}{" "}
@@ -195,7 +227,10 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
             <input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Reason for booking anyway (required)" />
           </div>
         )}
-        <input name="customerName" placeholder="Customer name" required defaultValue={customer?.name ?? ""} key={customer?.id ?? "new"} />
+        <input name="customerName" placeholder="Customer name" required value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+      </section>
+      <section className="panel stack form-section">
+        <header className="section-head"><span className="step">2</span><h2>Location</h2></header>
         <input name="address" placeholder="Address" defaultValue={customer?.address ?? ""} key={`${customer?.id ?? "new"}-address`} />
         <div className="filters">
           <select value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictId(""); }}>
@@ -213,19 +248,24 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <input name="pincode" placeholder="Pincode" value={pincode} onChange={(event) => setPincode(event.target.value)} />
         </div>
       </section>
-      <section className="panel stack">
-        <h2>Complaint</h2>
-        <div className="chips">
-          {CALL_TYPES.map((type) => <button type="button" key={type.id} className={`chip ${callType === type.id ? "on" : ""}`} onClick={() => setCallType(type.id)}>{type.label}</button>)}
-        </div>
+      <section className="panel stack form-section">
+        <header className="section-head"><span className="step">3</span><h2>Product</h2></header>
         <div className="filters">
-          <select name="natureId" required defaultValue=""><option value="">Nature of complaint</option>{(options.issues as Option[]).map((issue) => <option key={issue.id} value={issue.id}>{issue.name}</option>)}</select>
           <select value={categoryId} onChange={(event) => chooseCategory(event.target.value)}>
             <option value="">Product category</option>
             {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
           <select value={productId} onChange={(event) => chooseProduct(event.target.value)}><option value="">Product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
           <select name="brandId" defaultValue=""><option value="">OEM / brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select>
+        </div>
+      </section>
+      <section className="panel stack form-section">
+        <header className="section-head"><span className="step">4</span><h2>Complaint</h2></header>
+        <div className="chips">
+          {CALL_TYPES.map((type) => <button type="button" key={type.id} className={`chip ${callType === type.id ? "on" : ""}`} onClick={() => setCallType(type.id)}>{type.label}</button>)}
+        </div>
+        <div className="filters">
+          <select name="natureId" required defaultValue=""><option value="">Nature of complaint</option>{(options.issues as Option[]).map((issue) => <option key={issue.id} value={issue.id}>{issue.name}</option>)}</select>
           <select name="priority" defaultValue="NORMAL">{PRIORITIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
           <select name="source" defaultValue="CALL">{SOURCES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
           <input type="date" name="scheduleDate" />
@@ -241,8 +281,8 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           </div>
         </details>
       </section>
-      <section className="panel">
-        <h2>Assignment</h2>
+      <section className="panel form-section">
+        <header className="section-head"><span className="step">5</span><h2>Assignment</h2></header>
         {suggested ? <p><b>{suggested.name}</b> · {suggested.reason}</p> : <p className="muted">No technician covers this pincode yet. You can still book it unassigned.</p>}
         <div className="filters">
           <button type="button" className={`chip ${assignMode === "suggest" ? "on" : ""}`} onClick={() => { setAssignMode("suggest"); if (suggestions[0]) setEngineerId(suggestions[0].engineerId); }}>Use suggestion</button>
@@ -254,8 +294,17 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           </select>
         </div>
       </section>
-      {error && <div className="banner bad">{error}</div>}
-      <button className="btn" disabled={pending}>{pending ? "Booking…" : "Save complaint"}</button>
+      </div>
+      <aside className="submit-bar panel">
+        <p className="kicker">Summary</p>
+        <p><b>{customerName || customer?.name || "New customer"}</b></p>
+        <p className="mono">{phone || "Mobile"}</p>
+        <p>{districtName || "Location"}{pincode ? ` · ${pincode}` : ""}</p>
+        <p>{productName || "Product"} · {CALL_TYPES.find((type) => type.id === callType)?.label}</p>
+        <p className="muted">{assignMode === "none" ? "Leave open" : suggested?.name || "Assignment"}</p>
+        {error && <div className="banner bad">{error}</div>}
+        <button className="btn" disabled={pending}>{pending ? "Booking…" : "Save complaint"}</button>
+      </aside>
     </form>
   );
 }

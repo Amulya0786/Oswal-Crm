@@ -51,6 +51,8 @@ const ALIASES: Record<string, string> = {
   "serial no": "serialNo",
   "serial number": "serialNo",
   serial: "serialNo",
+  capacity: "capacityLabel",
+  "hp capacity": "capacityLabel",
   company: "companyCode",
   email: "email",
   sku: "sku",
@@ -100,6 +102,7 @@ export const COMPLAINT_FIELDS = [
   ["msedclSubdivision", "MSEDCL subdivision"],
   ["schemeName", "Scheme"],
   ["serialNo", "Serial no"],
+  ["capacityLabel", "Capacity"],
   ["companyCode", "Company"],
 ] as const;
 

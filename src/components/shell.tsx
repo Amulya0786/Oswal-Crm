@@ -3,48 +3,62 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, LayoutDashboard, Library, LineChart, LogOut, Search, Settings, Shield, Upload, Wallet, Clock } from "lucide-react";
+import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, PanelLeft, Search, Settings, Shield, Upload, Users, Wallet } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
+import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/complaints", label: "Complaints", icon: ClipboardList },
-  { href: "/masters", label: "Masters", icon: Library },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/analytics", label: "Analytics", icon: LineChart },
-  { href: "/security", label: "Security", icon: Shield },
-  { href: "/import", label: "Import", icon: Upload },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/attendance", label: "Attendance", icon: Clock },
-  { href: "/expenses", label: "Expenses", icon: Wallet },
+const GROUPS = [
+  { label: "Desk", items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
+  { label: "Service", items: [
+    { href: "/complaints", label: "Complaints", icon: ClipboardList },
+    { href: "/customers", label: "Customers", icon: Users },
+    { href: "/attendance", label: "Attendance", icon: Clock },
+    { href: "/expenses", label: "Expenses", icon: Wallet },
+  ] },
+  { label: "Masters", items: [{ href: "/masters", label: "Masters", icon: Library }] },
+  { label: "Reports", items: [
+    { href: "/reports", label: "Reports", icon: BarChart3 },
+    { href: "/analytics", label: "Analytics", icon: LineChart },
+  ] },
+  { label: "Admin", items: [
+    { href: "/security", label: "Security", icon: Shield },
+    { href: "/import", label: "Import", icon: Upload },
+    { href: "/settings", label: "Settings", icon: Settings },
+  ] },
 ];
 
-export function Mark({ size = 36 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden>
-      <rect width="48" height="48" rx="14" fill="#f4f1ea" />
-      <circle cx="24" cy="24" r="8" fill="none" stroke="#c4621a" strokeWidth="2.4" />
-      <path d="M24 9v6M24 33v6M9 24h6M33 24h6M14 14l4 4M30 30l4 4M34 14l-4 4M18 30l-4 4" stroke="#10243f" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
+const CRUMB: Record<string, string> = {
+  complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
+  security: "Security", import: "Import", settings: "Settings", attendance: "Attendance", expenses: "Expenses",
+  exports: "Exports", customers: "Customers", assets: "Asset",
+};
 
 export function Shell({ user, scope, version, children }: { user: SessionUser; scope: string; version: number; children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<{ complaints: { id: string; ticketNo: string; customerName: string; status: string }[]; customers: { id: string; name: string; phone: string }[]; engineers: { id: string; name: string }[] }>({ complaints: [], customers: [], engineers: [] });
-  const accent = scope === "all" ? "#c4621a" : user.companies.find((company) => company.id === scope)?.accent ?? "#c4621a";
-  const visible = NAV.filter((item) => {
-    if (item.href === "/security") return user.caps.security;
-    if (item.href === "/settings") return user.caps.settings;
-    if (item.href === "/import") return user.caps.import;
-    if (item.href === "/analytics" || item.href === "/reports") return user.caps.report || user.caps.analytics;
-    if (item.href === "/masters") return user.caps.masterView;
-    return true;
-  });
+  const current = user.companies.find((company) => company.id === scope);
+  const logo = current?.code === "SOLAR" ? "SOLAR" : "PUMPS";
+
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      if (item.href === "/security") return user.caps.security;
+      if (item.href === "/settings") return user.caps.settings;
+      if (item.href === "/import") return user.caps.import;
+      if (item.href === "/analytics" || item.href === "/reports") return user.caps.report || user.caps.analytics;
+      if (item.href === "/masters") return user.caps.masterView;
+      return true;
+    }),
+  })).filter((group) => group.items.length);
+
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem("oswal-sidebar") === "collapsed");
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -84,14 +98,22 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
     router.refresh();
   }
 
+  const trail = [{ href: "/", label: "Desk" }];
+  let built = "";
+  for (const part of path.split("/").filter(Boolean)) {
+    built += `/${part}`;
+    trail.push({ href: built, label: CRUMB[part] ?? decodeURIComponent(part) });
+  }
+
   return (
-    <div className="app" style={{ ["--accent" as string]: accent }}>
-      <header className="mast">
-        <div className="mast-top">
-          <Link href="/" className="brand">
-            <Mark />
-            <span><strong>Oswal</strong><em>Service desk</em></span>
-          </Link>
+    <div className={`app ${collapsed ? "collapsed" : ""}`}>
+      <header className="topband">
+        <div className="topband-row">
+          <button type="button" className="icon-btn" aria-label="Collapse sidebar" onClick={() => {
+            const next = !collapsed;
+            setCollapsed(next);
+            window.localStorage.setItem("oswal-sidebar", next ? "collapsed" : "open");
+          }}><PanelLeft size={16} /></button>
           <div className="switcher" aria-label="Company">
             {user.companies.map((company) => (
               <button key={company.id} className={scope === company.id ? "active" : ""} onClick={() => choose(company.id)}>
@@ -101,8 +123,10 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             {user.caps.allCompanies && <button className={scope === "all" ? "active" : ""} onClick={() => choose("all")}>All</button>}
           </div>
           <button className="search-btn" onClick={() => setOpen(true)}><Search size={16} /> Search <kbd>Ctrl K</kbd></button>
+          <ThemeToggle />
+          <span className="live-dot" title="Live" />
           <details className="user-menu">
-            <summary>{user.name}<div className="muted" style={{ fontSize: 12 }}>{ROLE_LABEL[user.role]}</div></summary>
+            <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#d5e7dc" }}>{ROLE_LABEL[user.role]}</div></summary>
             <div className="user-pop">
               <div style={{ padding: 8 }}>{user.email}</div>
               <Link href="/exports">Exports</Link>
@@ -110,23 +134,42 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             </div>
           </details>
         </div>
-        <nav className="nav-row">
-          {visible.map((item) => {
-            const Icon = item.icon;
-            const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon size={16} />{item.label}</Link>;
-          })}
-          <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6, alignItems: "center", color: "#b7c6d8", fontSize: 12 }}><i className="live-dot" /> Live</span>
-        </nav>
       </header>
-      <main className="main">{children}</main>
+      <div className="workspace">
+        <aside className="sidebar">
+          <Link href="/" className="side-brand" aria-label="Oswal">
+            <BrandLogo company={logo} collapsed={collapsed} />
+          </Link>
+          {groups.map((group) => (
+            <div key={group.label}>
+              <div className="side-group">{group.label}</div>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
+                return <Link key={item.href} href={item.href} className={`side-link ${active ? "active" : ""}`}><Icon size={16} /><span>{item.label}</span></Link>;
+              })}
+            </div>
+          ))}
+        </aside>
+        <main className="main">
+          <nav className="crumbs" aria-label="Breadcrumb">
+            {trail.map((item, index) => (
+              <span key={item.href}>
+                {index > 0 && " / "}
+                {index === trail.length - 1 ? item.label : <Link href={item.href}>{item.label}</Link>}
+              </span>
+            ))}
+          </nav>
+          <PageTransition path={path}>{children}</PageTransition>
+        </main>
+      </div>
       {open && (
         <div className="palette" onClick={() => setOpen(false)}>
           <form onClick={(event) => event.stopPropagation()}>
             <input autoFocus placeholder="Comp. No, mobile, serial, customer, technician" value={q} onChange={(event) => setQ(event.target.value)} />
             <div>
               {hits.complaints.map((row) => <Link className="hit" key={row.id} href={`/complaints/${row.ticketNo}`} onClick={() => setOpen(false)}><b className="mono">{row.ticketNo}</b> · {row.customerName} · {row.status}</Link>)}
-              {hits.customers.map((row) => <Link className="hit" key={row.id} href={`/complaints?q=${encodeURIComponent(row.phone)}`} onClick={() => setOpen(false)}>{row.name} · {row.phone}</Link>)}
+              {hits.customers.map((row) => <Link className="hit" key={row.id} href={`/customers/${row.id}`} onClick={() => setOpen(false)}>{row.name} · {row.phone}</Link>)}
               {hits.engineers.map((row) => <Link className="hit" key={row.id} href={`/complaints?engineerId=${row.id}`} onClick={() => setOpen(false)}>{row.name}</Link>)}
               {q.trim().length >= 2 && !hits.complaints.length && !hits.customers.length && !hits.engineers.length && <p className="muted">No matches yet.</p>}
             </div>

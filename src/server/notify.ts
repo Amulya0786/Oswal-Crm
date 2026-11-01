@@ -68,8 +68,15 @@ export async function deliver(msg: Outbound) {
   } catch (error) {
     return { provider: "external", status: "FAILED", detail: error instanceof Error ? error.message : "send failed" };
   }
+  if (msg.channel === "EMAIL") {
+    const origin = process.env.APP_URL ?? "http://localhost:3000";
+    const safe = msg.body.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char] ?? char));
+    const html = `<div style="font-family:Inter,Arial,sans-serif;color:#242424"><div style="background:#02502f;padding:16px 20px"><img src="${origin}/brand/pumps-logo.png" alt="Oswal" height="64" /></div><div style="padding:16px 20px"><h1 style="font-size:18px">${msg.subject ?? "Oswal"}</h1><p style="white-space:pre-wrap">${safe}</p></div></div>`;
+    console.log(`[notify:EMAIL] -> ${msg.to} | ${html}`);
+    return { provider: "console", status: "LOGGED", detail: "branded email header" };
+  }
   console.log(`[notify:${msg.channel}] -> ${msg.to} | ${msg.body}`);
-  return { provider: "console", status: "LOGGED", detail: process.env.SMTP_URL && msg.channel === "EMAIL" ? "email sender stubbed" : undefined };
+  return { provider: "console", status: "LOGGED", detail: undefined as string | undefined };
 }
 
 export async function notifyComplaint(input: {

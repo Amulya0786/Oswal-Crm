@@ -6,6 +6,7 @@ import { canSee } from "./scope";
 import { suggestTechnicians } from "./assignment";
 import { notifyComplaint, queueWebhook } from "./notify";
 import { bookingConflicts, type BookingRow } from "@/lib/duplicates";
+import { ensureAsset, ensureCustomer, findCustomer, relinkAsset } from "./link";
 import { resolveSerial, validateSerial, channelFor } from "@/lib/quality";
 import { normalizePhone } from "@/lib/mask";
 import { labelOf, STATUSES, DEFAULT_SLA_HOURS, ACTIVE_STATUSES } from "@/lib/labels";
@@ -106,7 +107,8 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
   const serial = resolveSerial({ serial: input.serialNo, unavailable: input.serialUnavailable, reason: input.serialUnavailableReason });
   if (!serial.ok) throw new HttpError(400, serial.reason);
   const capacityLabel = product?.hpId ? (await prisma.hpCapacity.findUnique({ where: { id: product.hpId } }))?.label ?? null : null;
-  const existingCustomer = await prisma.customer.findUnique({ where: { companyId_phone: { companyId: company.id, phone } } });
+  const foundCustomer = await findCustomer(prisma, { phone, name: input.customerName, pincode, village: area?.name ?? null });
+  const existingCustomer = foundCustomer?.customer ?? null;
   const or: { phone?: string; serialNorm?: string; customerId?: string }[] = [{ phone }];
   if (serial.serial) or.push({ serialNorm: serial.serial });
   if (existingCustomer) or.push({ customerId: existingCustomer.id });
@@ -179,33 +181,31 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
 
   const created = await prisma.$transaction(async (tx) => {
     const ticketNo = await nextTicketNo(bookDate);
-    const customer = existingCustomer
-      ? await tx.customer.update({
-          where: { id: existingCustomer.id },
-          data: {
-            name: input.customerName,
-            address: clean(input.address) ?? existingCustomer.address,
-            stateId,
-            districtId,
-            areaId,
-            pincode,
-            isTest: Boolean(user?.isTest || existingCustomer.isTest),
-          },
-        })
-      : await tx.customer.create({
-          data: {
-            companyId: company.id,
-            name: input.customerName,
-            phone,
-            isTest: Boolean(user?.isTest),
-            altPhone: clean(input.altPhone),
-            address: clean(input.address),
-            stateId,
-            districtId,
-            areaId,
-            pincode,
-          },
-        });
+    const party = await ensureCustomer(tx, {
+      companyId: company.id,
+      name: input.customerName,
+      phone,
+      altPhone: clean(input.altPhone),
+      address: clean(input.address),
+      stateId,
+      districtId,
+      areaId,
+      pincode,
+      village: area?.name ?? null,
+      isTest: Boolean(user?.isTest),
+    });
+    const customer = party.customer;
+    const asset = await ensureAsset(tx, {
+      companyId: company.id,
+      customerId: customer.id,
+      name: input.customerName,
+      phone,
+      productId: product?.id,
+      productName: clean(input.productDetails) ?? product?.name ?? null,
+      modelName: product?.name ?? clean(input.productDetails),
+      serialNorm: serial.serial,
+      capacityLabel,
+    });
     const complaint = await tx.complaint.create({
       data: {
         ticketNo,
@@ -235,8 +235,9 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
         serialUnavailableReason: serial.reason,
         capacityLabel,
         channel: channelFor(input.callType),
-        excludeFromMis: Boolean(user?.isTest || existingCustomer?.isTest),
+        excludeFromMis: Boolean(user?.isTest || customer.isTest),
         serialCustomerMismatch: Boolean(otherOwner),
+        assetId: asset.id,
         duplicateOfTicket: conflicts.lead?.ticketNo ?? otherOwner?.ticketNo ?? null,
         duplicateOverrideReason: override,
         natureId: nature?.id,
@@ -263,13 +264,18 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
         createdById: user?.id,
       },
     });
+    await relinkAsset(tx, asset.id);
+    const linked = await tx.complaint.findUnique({ where: { id: complaint.id }, select: { repeatOfTicket: true, repeatWindow: true } });
+    const repeatNote = linked?.repeatOfTicket
+      ? ` · repeat of ${linked.repeatOfTicket}${linked.repeatWindow ? ` · repeat failure within ${linked.repeatWindow} days` : ""}`
+      : "";
     await tx.complaintEvent.create({
       data: {
         complaintId: complaint.id,
         actorId: user?.id,
         actorName,
         type: "CREATED",
-        message: `Booked ${ticketNo}${serial.pending ? " · serial pending" : ""}${engineer ? ` and assigned to ${engineer.name}` : ""}${override ? ` · duplicate override: ${override}` : ""}`,
+        message: `Booked ${ticketNo}${serial.pending ? " · serial pending" : ""}${engineer ? ` and assigned to ${engineer.name}` : ""}${repeatNote}${override ? ` · duplicate override: ${override}` : ""}`,
       },
     });
     await tx.auditLog.create({
@@ -362,6 +368,23 @@ export async function getComplaint(user: SessionUser, scope: string, idOrTicket:
     engineerOpen: row.engineerId ? ctx.loadCounts.get(row.engineerId) ?? 0 : 0,
     historicalHours: ctx.hist[row.callType] ?? null,
   });
+  const family: { customerId?: string; assetId?: string }[] = [];
+  if (row.customerId) family.push({ customerId: row.customerId });
+  if (row.assetId) family.push({ assetId: row.assetId });
+  const related = family.length
+    ? await prisma.complaint.findMany({
+        where: { id: { not: row.id }, OR: family },
+        orderBy: { bookDate: "desc" },
+        take: 40,
+        include: {
+          events: { orderBy: { at: "asc" }, take: 30 },
+          spares: { orderBy: { requestedAt: "asc" } },
+        },
+      })
+    : [];
+  const asset = row.assetId
+    ? await prisma.asset.findUnique({ where: { id: row.assetId } })
+    : null;
   return {
     ...row,
     phone: displayPhone(row.phone, mask),
@@ -370,6 +393,22 @@ export async function getComplaint(user: SessionUser, scope: string, idOrTicket:
     slaRisk: signal.risk,
     slaRiskReason: signal.reason,
     timeline: buildTimeline(row),
+    asset,
+    relatedTickets: related.map((item) => ({
+      id: item.id,
+      ticketNo: item.ticketNo,
+      status: item.status,
+      bookDate: item.bookDate,
+      closedAt: item.closedAt,
+      assignedName: item.assignedName,
+      actualProblem: item.actualProblem,
+      actualSolution: item.actualSolution,
+      natureText: item.natureText,
+      productDetails: item.productDetails,
+      sameAsset: item.assetId != null && item.assetId === row.assetId,
+      spares: item.spares.map((spare) => `${spare.partName} × ${spare.qty}`),
+      events: item.events.map((event) => ({ at: event.at, type: event.type, message: event.message, actorName: event.actorName })),
+    })),
   };
 }
 
@@ -553,6 +592,25 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
         data: input.checklist.filter((item) => item.checked).map((item) => ({ complaintId: current.id, itemId: item.itemId, checked: true })),
       });
     }
+    let assetId = current.assetId;
+    if (current.customerId && (input.action === "close" || data.serialNorm || !assetId)) {
+      const moved = await ensureAsset(tx, {
+        companyId: current.companyId,
+        customerId: current.customerId,
+        name: current.customerName,
+        phone: current.phone,
+        productId: current.productId,
+        productName: current.productDetails,
+        serialNorm: (data.serialNorm as string | undefined) ?? current.serialNorm,
+        capacityLabel: current.capacityLabel,
+      });
+      if (moved.id !== current.assetId) {
+        await tx.complaint.update({ where: { id: current.id }, data: { assetId: moved.id } });
+        if (current.assetId) await relinkAsset(tx, current.assetId);
+      }
+      assetId = moved.id;
+    }
+    if (assetId && (input.action === "close" || data.serialNorm)) await relinkAsset(tx, assetId);
     await tx.auditLog.create({
       data: {
         userId: user.id,

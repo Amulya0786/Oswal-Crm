@@ -250,7 +250,8 @@ export async function runSummary(now = new Date()) {
     const row = rows[0];
     lines.push(`${company.shortName}: logged ${row?.logged ?? 0}, closed ${row?.closed ?? 0}, pending ${row?.pending ?? 0}, SLA breached ${row?.breach ?? 0}`);
   }
-  const html = `<article><h1>Oswal daily summary</h1><ul>${lines.slice(1).map((line) => `<li>${line}</li>`).join("")}</ul></article>`;
+  const origin = process.env.APP_URL ?? "http://localhost:3000";
+  const html = `<article style="font-family:Inter,Arial,sans-serif;color:#242424"><div style="background:#02502f;padding:16px 20px"><img src="${origin}/brand/pumps-logo.png" alt="Oswal" height="64" /></div><h1>Oswal daily summary</h1><ul>${lines.slice(1).map((line) => `<li>${line}</li>`).join("")}</ul></article>`;
   const pdf = textPdf("Oswal daily summary", lines);
   const dir = path.join(process.cwd(), "data", "summaries");
   await mkdir(dir, { recursive: true });

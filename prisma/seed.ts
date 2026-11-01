@@ -14,10 +14,10 @@ async function main() {
   `);
   await prisma.dataVersion.create({ data: { id: 1, version: 1 } });
   const pumps = await prisma.company.create({
-    data: { id: "co_pumps", code: "PUMPS", name: "Oswal Pumps", legalName: "Oswal Pumps Ltd", shortName: "Oswal Pumps", accent: "#1f4e89", logoText: "OP", tagline: "Pumps and motors", address: "Karnal, Haryana" },
+    data: { id: "co_pumps", code: "PUMPS", name: "Oswal Pumps", legalName: "Oswal Pumps Ltd", shortName: "Oswal Pumps", accent: "#02502f", logoText: "OP", tagline: "Pumps and motors", address: "Karnal, Haryana" },
   });
   const solar = await prisma.company.create({
-    data: { id: "co_solar", code: "SOLAR", name: "Oswal Solar", legalName: "Oswal Solar Energy", shortName: "Oswal Solar", accent: "#c2410c", logoText: "OS", tagline: "Panels and inverters", address: "Karnal, Haryana" },
+    data: { id: "co_solar", code: "SOLAR", name: "Oswal Solar", legalName: "Oswal Solar Energy", shortName: "Oswal Solar", accent: "#FFC61A", logoText: "OS", tagline: "Panels and inverters", address: "Karnal, Haryana" },
   });
   await prisma.user.create({
     data: {

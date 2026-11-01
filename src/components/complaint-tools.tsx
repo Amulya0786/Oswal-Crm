@@ -40,6 +40,7 @@ export function ComplaintTable({
   const router = useRouter();
   const [picked, setPicked] = useState<string[]>([]);
   const [message, setMessage] = useState("");
+  const [dense, setDense] = useState(false);
   const all = useMemo(() => rows.map((row) => row.id), [rows]);
 
   async function act(id: string, body: object) {
@@ -73,7 +74,10 @@ export function ComplaintTable({
           <button className="btn line" onClick={() => exportSelected()}>Export page</button>
         </div>
       )}
-      <div className="table-wrap">
+      <div className="table-toolbar">
+        <button type="button" className="btn line" onClick={() => setDense((value) => !value)}>{dense ? "Comfortable rows" : "Compact rows"}</button>
+      </div>
+      <div className={`table-wrap ${dense ? "table-dense" : ""}`}>
         <table>
           <thead>
             <tr>
@@ -82,7 +86,7 @@ export function ComplaintTable({
           </thead>
           <tbody>
             {!rows.length && (
-              <tr><td colSpan={12} className="muted">No complaints match. Book the first call, or clear the filters.</td></tr>
+              <tr><td colSpan={12}><div className="empty-inline"><b>The register is empty</b><span>Book the first call, or clear the filters. Nothing is hidden.</span></div></td></tr>
             )}
             {rows.map((row) => (
               <tr key={row.id}>
@@ -96,7 +100,7 @@ export function ComplaintTable({
                 <td data-label="Product">{row.productDetails}</td>
                 <td data-label="Assigned">{row.assignedName ?? "—"}</td>
                 <td data-label="Status"><span className={statusClass(row.status)}>{labelOf(STATUSES, row.status)}</span></td>
-                <td data-label="Age">{row.ageDays}d</td>
+                <td data-label="Age" className="num">{row.ageDays}d</td>
                 <td data-label="Action">
                   <details>
                     <summary>Update</summary>

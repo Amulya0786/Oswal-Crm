@@ -16,7 +16,16 @@ const PUBLIC_PREFIXES = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return NextResponse.next();
-  if (pathname.startsWith("/_next") || pathname === "/icon.svg" || pathname === "/favicon.ico") return NextResponse.next();
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/brand/") ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/icon" ||
+    pathname === "/apple-icon" ||
+    pathname === "/icon.svg" ||
+    pathname === "/favicon.ico" ||
+    pathname === "/icon.png"
+  ) return NextResponse.next();
   if (!request.cookies.get("oswal_session")) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Sign in" }, { status: 401 });
     const url = request.nextUrl.clone();

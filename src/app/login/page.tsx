@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mark } from "@/components/shell";
+import { BrandLogo } from "@/components/chrome";
 
 const DEMOS = [["Admin", "admin@oswal.test", "Admin@123"]];
 
@@ -27,18 +27,15 @@ export default function LoginPage() {
   }
   return (
     <div className="login-shell">
-      <section className="login-hero">
-        <div>
-          <Mark size={52} />
-          <h1>Oswal Service</h1>
-          <p>The complaint desk for Oswal Pumps and Oswal Solar. Book, assign and close a call without the old screens.</p>
-        </div>
-        <p>Karnal · Haryana</p>
-      </section>
+      <div className="login-bg" />
+      <div className="login-bg-2" />
+      <div className="login-shade" />
       <section className="login-card">
         <form action={onSubmit} className="stack">
-          <p className="kicker">Sign in</p>
-          <h2 style={{ fontFamily: "var(--display)", margin: 0 }}>Welcome back</h2>
+          <BrandLogo />
+          <p className="kicker">Oswal Pumps · Oswal Solar</p>
+          <h2>Service desk</h2>
+          <p className="muted">Book, assign and close a call. Karnal · Haryana.</p>
           <label className="stack">Email<input name="email" type="email" autoComplete="username" required defaultValue="admin@oswal.test" /></label>
           <label className="stack">Password<input name="password" type="password" autoComplete="current-password" required defaultValue="Admin@123" /></label>
           {error && <div className="banner bad">{error}</div>}

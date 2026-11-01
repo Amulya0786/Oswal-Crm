@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mark } from "@/components/shell";
+import { BrandLogo } from "@/components/chrome";
 
 export default function TrackPage() {
   const [step, setStep] = useState<"ask" | "otp" | "done">("ask");
@@ -14,7 +14,7 @@ export default function TrackPage() {
 
   return (
     <main className="main" style={{ maxWidth: 640 }}>
-      <Mark />
+      <BrandLogo />
       <h1 style={{ fontFamily: "var(--display)" }}>Track a complaint</h1>
       {step === "ask" && (
         <form className="stack" onSubmit={async (event) => {

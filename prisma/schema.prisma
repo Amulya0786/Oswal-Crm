@@ -31,6 +31,7 @@ model Company {
   templates     NotificationTemplate[]
   beneficiaries Beneficiary[]
   webhooks      WebhookEndpoint[]
+  assets        Asset[]
 }
 
 model User {
@@ -226,6 +227,7 @@ model Product {
   pumpHead    PumpHead?   @relation(fields: [pumpHeadId], references: [id], onDelete: SetNull)
   hp          HpCapacity? @relation(fields: [hpId], references: [id], onDelete: SetNull)
   complaints  Complaint[]
+  assets      Asset[]
 
   @@unique([companyId, sku])
   @@index([companyId])
@@ -244,15 +246,58 @@ model Customer {
   districtId String?
   areaId     String?
   pincode    String?
-  isTest     Boolean     @default(false)
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  state      State?      @relation(fields: [stateId], references: [id], onDelete: SetNull)
-  district   District?   @relation(fields: [districtId], references: [id], onDelete: SetNull)
-  area       Area?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
-  complaints Complaint[]
+  isTest       Boolean     @default(false)
+  phoneNorm    String?     @unique
+  nameNorm     String?
+  village      String?
+  mergedIntoId String?
+  mergedInto   Customer?   @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Customer[]  @relation("CustomerMerge")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  state        State?      @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  district     District?   @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  area         Area?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  complaints   Complaint[]
+  phones       CustomerPhone[]
+  assets       Asset[]
 
   @@unique([companyId, phone])
   @@index([phone])
+  @@index([companyId])
+  @@index([nameNorm, pincode])
+  @@index([mergedIntoId])
+}
+
+model CustomerPhone {
+  id         String   @id @default(cuid())
+  customerId String
+  phoneNorm  String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+model Asset {
+  id            String      @id @default(cuid())
+  companyId     String
+  customerId    String
+  productId     String?
+  productName   String?
+  modelName     String?
+  serialNorm    String?
+  capacityLabel String?
+  identityKey   String      @unique
+  installedAt   DateTime?
+  warrantyUntil DateTime?
+  amcUntil      DateTime?
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product       Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  complaints    Complaint[]
+
+  @@index([customerId])
+  @@index([serialNorm])
+  @@index([productId])
   @@index([companyId])
 }
 
@@ -458,6 +503,9 @@ model Complaint {
   slaRiskReason     String?
   repeatFlag        Boolean   @default(false)
   repeatReason      String?
+  repeatOfTicket    String?
+  repeatWindow      Int?
+  assetId           String?
   assignReason      String?
   escalationLevel   Int       @default(0)
   escalatedToId     String?
@@ -488,6 +536,7 @@ model Complaint {
   escalations     EscalationLog[]
   spares          SpareRequest[]
   problemCategory ProblemCategory? @relation(fields: [problemCategoryId], references: [id], onDelete: SetNull)
+  asset           Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([companyId, status, bookDate])
   @@index([status, bookDate])
@@ -516,6 +565,9 @@ model Complaint {
   @@index([channel, status])
   @@index([solvedAt])
   @@index([holdCode, status])
+  @@index([assetId, bookDate])
+  @@index([repeatOfTicket])
+  @@index([repeatWindow])
 }
 
 model SpareRequest {

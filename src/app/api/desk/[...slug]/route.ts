@@ -12,6 +12,7 @@ import { filtersFromRecord } from "@/server/scope";
 import { listComplaints } from "@/server/query";
 import { runEscalation, runSummary } from "@/server/jobs";
 import { classifyDuplicates } from "@/lib/duplicates";
+import { findCustomer, loadCustomerHistory, mergeCustomers } from "@/server/link";
 import { normalizePhone, displayPhone } from "@/lib/mask";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 
@@ -71,7 +72,7 @@ async function route(method: string, slug: string[], req: Request) {
     const [complaints, customers, engineers] = await Promise.all([
       listComplaints(user, scope, { q, pageSize: 8 }),
       prisma.customer.findMany({
-        where: { ...companyWhere, OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] },
+        where: { mergedIntoId: null, ...companyWhere, OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] },
         take: 6,
         select: { id: true, name: true, phone: true, companyId: true, district: { select: { name: true } } },
       }),
@@ -105,10 +106,37 @@ async function route(method: string, slug: string[], req: Request) {
         })
       : [];
     const customers = phone.length >= 8
-      ? await prisma.customer.findMany({ where: { phone }, take: 4, include: { state: true, district: true, area: true, company: true } })
+      ? await prisma.customer.findMany({ where: { phone, mergedIntoId: null }, take: 4, include: { state: true, district: true, area: true, company: true } })
       : [];
     const duplicates = classifyDuplicates(rows, { phone, serialNo: serial, companyId: companyId ?? "" });
-    return json({ customers, duplicates });
+    const history = phone.length >= 10 ? await loadCustomerHistory(phone) : null;
+    return json({ customers, duplicates, history });
+  }
+
+  if (method === "POST" && head === "customers" && id === "merge") {
+    if (user.role !== "ADMIN") return json({ error: "Only an admin can merge customers" }, 403);
+    const body = await readJson(req);
+    let dropId = String(body.dropId ?? "");
+    if (!dropId && body.phone) {
+      const found = await findCustomer(prisma, { phone: String(body.phone), name: String(body.name ?? "") });
+      dropId = found?.customer.id ?? "";
+    }
+    return json(await mergeCustomers(user, String(body.keepId ?? ""), dropId));
+  }
+
+  if (method === "POST" && head === "assets" && id) {
+    if (user.role !== "ADMIN" && !user.caps.masterWrite) return json({ error: "You cannot update this asset" }, 403);
+    const body = await readJson(req);
+    const warrantyUntil = body.warrantyUntil ? new Date(String(body.warrantyUntil)) : null;
+    const amcUntil = body.amcUntil ? new Date(String(body.amcUntil)) : null;
+    const asset = await prisma.asset.update({
+      where: { id },
+      data: {
+        warrantyUntil: body.warrantyUntil === "" ? null : warrantyUntil,
+        amcUntil: body.amcUntil === "" ? null : amcUntil,
+      },
+    });
+    return json({ id: asset.id });
   }
 
   if (method === "GET" && head === "suggest") {

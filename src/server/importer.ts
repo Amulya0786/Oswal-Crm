@@ -9,6 +9,7 @@ import { suggestMapping, COMPLAINT_FIELDS, CUSTOMER_FIELDS, PRODUCT_FIELDS, USER
 import { normalizeCallType, normalizePriority, normalizeSource, normalizeStatus, labelOf, STATUSES, DEFAULT_SLA_HOURS } from "@/lib/labels";
 import { validateSerial } from "@/lib/quality";
 import { companyCodeForCategory } from "@/lib/company-tag";
+import { ensureAsset, ensureCustomer, relinkAsset } from "./link";
 import { normalizePhone } from "@/lib/mask";
 import { parseLooseDate } from "@/lib/time";
 import type { SessionUser } from "@/lib/types";
@@ -132,12 +133,34 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
       const status = normalizeStatus(row.status) ?? "OPEN";
       const callType = normalizeCallType(row.callType);
       const hours = DEFAULT_SLA_HOURS[callType] ?? 72;
-      let customer = await prisma.customer.findUnique({ where: { companyId_phone: { companyId: company.id, phone } } });
-      if (!customer) {
-        customer = await prisma.customer.create({
-          data: { companyId: company.id, name: row.customerName, phone, address: row.address || null, stateId: state?.id, districtId: district?.id, areaId: area?.id, pincode: row.pincode || null },
-        });
-      }
+      const serialChecked = (row.serialNo || "").trim()
+        ? validateSerial(row.serialNo)
+        : null;
+      if (serialChecked && !serialChecked.ok) throw new Error(serialChecked.reason);
+      const serialNorm = serialChecked && serialChecked.ok ? serialChecked.serial : null;
+      const party = await ensureCustomer(prisma, {
+        companyId: company.id,
+        name: row.customerName,
+        phone,
+        address: row.address || null,
+        stateId: state?.id,
+        districtId: district?.id,
+        areaId: area?.id,
+        pincode: row.pincode || null,
+        village: area?.name ?? row.areaName,
+      });
+      const customer = party.customer;
+      const asset = await ensureAsset(prisma, {
+        companyId: company.id,
+        customerId: customer.id,
+        name: row.customerName,
+        phone,
+        productId: product?.id,
+        productName: row.productDetails || product?.name,
+        modelName: product?.name || row.productDetails,
+        serialNorm,
+        capacityLabel: row.capacityLabel || row.hp || null,
+      });
       const data = {
         companyId: company.id,
         bookDate,
@@ -157,19 +180,9 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         productId: product?.id,
         productDetails: row.productDetails || product?.name,
         categoryId: product?.categoryId,
-        serialNo: (() => {
-          const raw = (row.serialNo || "").trim();
-          if (!raw) return null;
-          const checked = validateSerial(raw);
-          if (!checked.ok) throw new Error(checked.reason);
-          return checked.serial;
-        })(),
-        serialNorm: (() => {
-          const raw = (row.serialNo || "").trim();
-          if (!raw) return null;
-          const checked = validateSerial(raw);
-          return checked.ok ? checked.serial : null;
-        })(),
+        assetId: asset.id,
+        serialNo: serialNorm,
+        serialNorm,
         serialPending: !(row.serialNo || "").trim(),
         serialUnavailableReason: (row.serialNo || "").trim() ? null : "OTHER",
         natureId: nature?.id,
@@ -208,6 +221,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         await prisma.complaint.create({ data: { ...data, ticketNo: fresh } });
         created++;
       }
+      await relinkAsset(prisma, asset.id);
     } catch (error) {
       errors.push(`Row ${index + 2}: ${error instanceof Error ? error.message : "failed"}`);
     }
@@ -226,7 +240,7 @@ async function importCustomers(rows: Record<string, string>[], companyId?: strin
       if (!company || !row.customerName || phone.length < 8) throw new Error("Name, mobile and company are required");
       await prisma.customer.upsert({
         where: { companyId_phone: { companyId: company.id, phone } },
-        create: { companyId: company.id, name: row.customerName, phone, address: row.address || null, email: row.email || null, pincode: row.pincode || null },
+        create: { companyId: company.id, name: row.customerName, phone, phoneNorm: phone, nameNorm: row.customerName.trim().toLowerCase().replace(/\s+/g, " "), address: row.address || null, email: row.email || null, pincode: row.pincode || null, village: row.areaName?.trim().toLowerCase() || null },
         update: { name: row.customerName, address: row.address || null, email: row.email || null },
       });
       created++;

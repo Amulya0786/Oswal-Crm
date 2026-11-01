@@ -36,7 +36,7 @@ export default async function AnalyticsPage() {
         <h2>Live complaints by district</h2>
         <div className="heat">
           {data.heat.map((row) => (
-            <Link key={row.label} href={`/complaints?q=${encodeURIComponent(row.label)}&statusGroup=active`} style={{ background: `rgba(196,98,26,${0.15 + (row.tickets / maxHeat) * 0.85})` }}>
+            <Link key={row.label} href={`/complaints?q=${encodeURIComponent(row.label)}&statusGroup=active`} style={{ background: `rgba(2,80,47,${0.15 + (row.tickets / maxHeat) * 0.85})` }}>
               <b>{row.label}</b><div>{row.tickets}</div>
             </Link>
           ))}

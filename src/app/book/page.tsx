@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mark } from "@/components/shell";
+import { BrandLogo } from "@/components/chrome";
 import { companyCodeForCategory } from "@/lib/company-tag";
 
 const PUBLIC_CATEGORIES = ["Solar Pump", "Submersible Pump", "Monoblock Pump", "Controller", "Motor", "RMS", "Solar Panel", "Rooftop System", "Inverter"];
@@ -25,7 +25,7 @@ export default function PublicBookPage() {
   const company = companies.find((item) => item.id === companyId);
   return (
     <main className="main" style={{ maxWidth: 720 }}>
-      <Mark />
+      <BrandLogo />
       <p className="kicker" style={{ color: company?.accent }}>{company?.legalName ?? "Oswal"}</p>
       <h1 style={{ fontFamily: "var(--display)" }}>Book a complaint</h1>
       <div className="chips">{companies.map((item) => <button type="button" key={item.id} className={`chip ${item.id === companyId ? "on" : ""}`} onClick={() => setCompanyId(item.id)}>{item.shortName}</button>)}</div>

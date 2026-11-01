@@ -17,6 +17,11 @@ export const REPORTS = [
   { slug: "state-count", title: "State ticket count", kind: "aggregate" as const, blurb: "Tickets by state." },
   { slug: "brand-count", title: "Brand ticket count", kind: "aggregate" as const, blurb: "Tickets by OEM / brand." },
   { slug: "missing-serial", title: "Missing serial", kind: "rows" as const, blurb: "Tickets closed or still open with no serial number." },
+  { slug: "repeat-rate", title: "Repeat complaint rate", kind: "aggregate" as const, blurb: "Repeat failures within 90 days, by product, model, technician and district." },
+  { slug: "repeat-customers", title: "Customers with 3+ complaints", kind: "aggregate" as const, blurb: "People who keep coming back." },
+  { slug: "mtbf", title: "Mean time between failures", kind: "aggregate" as const, blurb: "Average days between complaints on the same installed product." },
+  { slug: "reopen-technicians", title: "Closures that reopen", kind: "aggregate" as const, blurb: "Technicians whose closures are followed by another complaint within 30 days." },
+  { slug: "first-time-fix", title: "First-time fix", kind: "aggregate" as const, blurb: "Share of closures that were not a repeat and did not reopen within 30 days." },
 ];
 
 function dayStart(value?: string) {
@@ -102,6 +107,112 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
     const shaped = rows.map((row) => ({ [spec.name]: String(row.label), tickets: Number(row.tickets), pending: Number(row.pending), closed: Number(row.closed), mttr_hours: row.mttr_hours == null ? "" : Number(row.mttr_hours) }));
     return { ...meta, columns: cols([spec.name, "tickets", "pending", "closed", "mttr_hours"]), rows: shaped, total: shaped.length, page: 1, pageSize: shaped.length };
   }
+  if (slug === "repeat-rate") {
+    const where = reportWhere(user, scope, filters);
+    const slices = [
+      { slice: "Product", label: Prisma.raw(`COALESCE(c."categoryName", 'Unspecified')`) },
+      { slice: "Model", label: Prisma.raw(`COALESCE(c."productDetails", 'Unspecified')`) },
+      { slice: "Technician", label: Prisma.raw(`COALESCE(c."assignedName", 'Unassigned')`) },
+      { slice: "District", label: Prisma.raw(`COALESCE(c."districtName", 'Unknown')`) },
+    ];
+    const rows = [];
+    for (const slice of slices) {
+      const part = await prisma.$queryRaw<{ label: string; tickets: number; repeats: number; rate: number | null }[]>`
+        SELECT ${slice.label} AS label,
+          COUNT(*)::int AS tickets,
+          COUNT(*) FILTER (WHERE c."repeatWindow" IS NOT NULL)::int AS repeats,
+          ROUND((100.0 * COUNT(*) FILTER (WHERE c."repeatWindow" IS NOT NULL) / NULLIF(COUNT(*), 0))::numeric, 1) AS rate
+        FROM "Complaint" c
+        WHERE ${where}
+        GROUP BY 1
+        ORDER BY repeats DESC, tickets DESC
+        LIMIT 40
+      `;
+      rows.push(...part.map((row) => ({ slice: slice.slice, label: row.label, tickets: Number(row.tickets), repeats: Number(row.repeats), rate: row.rate == null ? "" : Number(row.rate) })));
+    }
+    return { ...meta, columns: cols(["slice", "label", "tickets", "repeats", "rate"]), rows, total: rows.length, page: 1, pageSize: rows.length };
+  }
+  if (slug === "repeat-customers") {
+    const where = reportWhere(user, scope, filters);
+    const rows = await prisma.$queryRaw<{ customer: string; phone: string; tickets: number; repeats: number }[]>`
+      SELECT c."customerName" AS customer, c.phone,
+        COUNT(*)::int AS tickets,
+        COUNT(*) FILTER (WHERE c."repeatWindow" IS NOT NULL)::int AS repeats
+      FROM "Complaint" c
+      WHERE ${where} AND c."customerId" IS NOT NULL
+      GROUP BY c."customerId", c."customerName", c.phone
+      HAVING COUNT(*) >= 3
+      ORDER BY tickets DESC
+      LIMIT 200
+    `;
+    return {
+      ...meta,
+      columns: cols(["customer", "phone", "tickets", "repeats"]),
+      rows: rows.map((row) => ({ customer: row.customer, phone: user.role === "TECHNICIAN" ? "••••" : row.phone, tickets: Number(row.tickets), repeats: Number(row.repeats) })),
+      total: rows.length, page: 1, pageSize: rows.length,
+    };
+  }
+  if (slug === "mtbf") {
+    const where = reportWhere(user, scope, filters);
+    const rows = await prisma.$queryRaw<{ product: string; mtbf_days: number | null; intervals: number }[]>`
+      WITH gaps AS (
+        SELECT COALESCE(c."productDetails", 'Unspecified') AS product,
+          EXTRACT(EPOCH FROM (c."bookDate" - LAG(c."bookDate") OVER (PARTITION BY c."assetId" ORDER BY c."bookDate"))) / 86400 AS gap_days
+        FROM "Complaint" c
+        WHERE ${where} AND c."assetId" IS NOT NULL
+      )
+      SELECT product, ROUND(AVG(gap_days)::numeric, 1) AS mtbf_days, COUNT(*)::int AS intervals
+      FROM gaps
+      WHERE gap_days IS NOT NULL
+      GROUP BY product
+      ORDER BY intervals DESC
+      LIMIT 200
+    `;
+    return {
+      ...meta,
+      columns: cols(["product", "mtbf_days", "intervals"]),
+      rows: rows.map((row) => ({ product: row.product, mtbf_days: row.mtbf_days == null ? "" : Number(row.mtbf_days), intervals: Number(row.intervals) })),
+      total: rows.length, page: 1, pageSize: rows.length,
+    };
+  }
+  if (slug === "reopen-technicians") {
+    const where = reportWhere(user, scope, filters);
+    const rows = await prisma.$queryRaw<{ technician: string; reopened: number }[]>`
+      SELECT COALESCE(prev."assignedName", 'Unassigned') AS technician, COUNT(*)::int AS reopened
+      FROM "Complaint" c
+      JOIN "Complaint" prev ON prev."ticketNo" = c."repeatOfTicket"
+      WHERE ${where} AND c."repeatWindow" = 30 AND prev."closedAt" IS NOT NULL
+      GROUP BY prev."engineerId", prev."assignedName"
+      ORDER BY reopened DESC
+      LIMIT 200
+    `;
+    return {
+      ...meta,
+      columns: cols(["technician", "reopened"]),
+      rows: rows.map((row) => ({ technician: row.technician, reopened: Number(row.reopened) })),
+      total: rows.length, page: 1, pageSize: rows.length,
+    };
+  }
+  if (slug === "first-time-fix") {
+    const where = reportWhere(user, scope, filters);
+    const rows = await prisma.$queryRaw<{ fixed: number; not_fixed: number; unknown: number; first_time_fix_pct: number | null }[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE c."firstTimeFix" IS TRUE)::int AS fixed,
+        COUNT(*) FILTER (WHERE c."firstTimeFix" IS FALSE)::int AS not_fixed,
+        COUNT(*) FILTER (WHERE c."firstTimeFix" IS NULL)::int AS unknown,
+        ROUND((100.0 * COUNT(*) FILTER (WHERE c."firstTimeFix" IS TRUE) / NULLIF(COUNT(*) FILTER (WHERE c."firstTimeFix" IS NOT NULL), 0))::numeric, 1) AS first_time_fix_pct
+      FROM "Complaint" c
+      WHERE ${where} AND c.status IN ('CLOSED', 'HAPPY_CALLING', 'CLOSED_UNVERIFIED')
+    `;
+    const row = rows[0];
+    const shaped = [{
+      fixed: Number(row?.fixed ?? 0),
+      not_fixed: Number(row?.not_fixed ?? 0),
+      unknown: Number(row?.unknown ?? 0),
+      first_time_fix_pct: row?.first_time_fix_pct == null ? "" : Number(row.first_time_fix_pct),
+    }];
+    return { ...meta, columns: cols(["fixed", "not_fixed", "unknown", "first_time_fix_pct"]), rows: shaped, total: 1, page: 1, pageSize: 1 };
+  }
   const extra = slug === "msedcl"
     ? Prisma.sql`(c."saralId" IS NOT NULL OR c."schemeName" IS NOT NULL OR c."callType" = 'SCHEME')`
     : slug === "missing-serial"
@@ -142,6 +253,10 @@ function cols(keys: string[]) {
     phone: "Mobile", districtName: "District", stateName: "State", productDetails: "Product", natureText: "Nature",
     assignedName: "Assigned to", saralId: "Saral Id", brandName: "OEM / brand", schemeName: "Scheme",
     msedclConsumerNo: "MSEDCL consumer", priority: "Priority",
+    slice: "Breakdown", label: "Name", repeats: "Repeat failures", rate: "Repeat rate %",
+    customer: "Customer", mtbf_days: "MTBF days", intervals: "Intervals",
+    technician: "Technician", reopened: "Reopened within 30 days",
+    fixed: "First-time fix", not_fixed: "Not first-time", unknown: "Not scored yet", first_time_fix_pct: "First-time fix %",
   };
   return keys.map((key) => ({ key, label: labels[key] ?? key }));
 }
