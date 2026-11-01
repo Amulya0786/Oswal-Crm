@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { getScope } from "@/server/auth";
 import { prisma } from "@/server/db";
+import { cookies } from "next/headers";
 import { EmptyState } from "@/components/chrome";
+import { phrase } from "@/lib/desk-copy";
 
 export const metadata = { title: "Customers" };
 
 export default async function CustomersPage() {
   const { user, scope } = await getScope();
   if (!user) return null;
+  const lang = (await cookies()).get("oswal_lang")?.value === "hi" ? "hi" : "en";
   const brandLimit = user.role === "OEM_PARTNER"
     ? { complaints: { some: { brandId: { in: user.brandIds.length ? user.brandIds : ["none"] } } } }
     : {};
@@ -26,7 +29,7 @@ export default async function CustomersPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1>Customers</h1>
+          <h1>{phrase(lang, "Customers")}</h1>
         </div>
       </div>
       {!customers.length && <EmptyState title="No customers yet" body="" />}
