@@ -6,11 +6,12 @@ export default function ImportPage() {
   const [preview, setPreview] = useState<any>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [entity, setEntity] = useState("complaints");
+  const [cutoff, setCutoff] = useState("2026-04-01");
   const [result, setResult] = useState<any>(null);
 
   return (
     <div>
-      <div className="page-head"><div><p className="kicker">Smartlogics import</p><h1>Bring the old register across</h1><p>Map columns, preview, then import. Original Comp. No values are kept.</p></div></div>
+      <div className="page-head"><div><p className="kicker">Smartlogics import</p><h1>Bring the old register across</h1><p>Complaints are kept only when the book date is on or after the cutoff. The default is 1 April 2026, not a full year of history. Older rows are skipped and counted. Original Comp. No values are kept.</p></div></div>
       <form className="filters" onSubmit={async (event) => {
         event.preventDefault();
         const body = new FormData(event.currentTarget);
@@ -18,13 +19,15 @@ export default function ImportPage() {
         const payload = await response.json();
         setPreview(payload);
         setMapping(payload.mapping ?? {});
+        if (payload.cutoff) setCutoff(payload.cutoff);
       }}>
         <input type="file" name="file" accept=".csv,.xlsx" required />
         <button className="btn">Read file</button>
       </form>
       {preview && (
         <section className="panel stack">
-          <p>{preview.rowCount} rows. Suggested mapping is filled in.</p>
+          <p>{preview.rowCount} rows. {preview.eligible ?? preview.rowCount} are on or after the cutoff. {preview.skipped ?? 0} are older and will be skipped. {preview.undated ? `${preview.undated} have no book date.` : ""}</p>
+          <label className="filters">Book date from<input type="date" value={cutoff} onChange={(event) => setCutoff(event.target.value)} /></label>
           <select value={entity} onChange={(event) => setEntity(event.target.value)}>
             <option value="complaints">Complaints</option>
             <option value="customers">Customers</option>
@@ -46,12 +49,12 @@ export default function ImportPage() {
             </table>
           </div>
           <button className="btn" onClick={async () => {
-            const response = await fetch("/api/desk/import/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: preview.token, entity, mapping }) });
+            const response = await fetch("/api/desk/import/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: preview.token, entity, mapping, cutoff }) });
             setResult(await response.json());
           }}>Import</button>
         </section>
       )}
-      {result && <div className="banner">Created {result.created}, updated {result.updated}. {(result.errors ?? []).join(" ")}</div>}
+      {result && <div className="banner">Created {result.created ?? 0}, updated {result.updated ?? 0}. Skipped {result.skipped ?? 0} before the cutoff. {result.undated ? `${result.undated} had no book date. ` : ""}{(result.errors ?? []).join(" ")}</div>}
     </div>
   );
 }

@@ -23,6 +23,10 @@ npm run dev
 | Admin | admin@oswal.test | Admin@123 |
 | Test account (excluded from MIS) | test.user@oswal.test | Test@123 |
 
+## Smartlogics history
+
+Complaint imports keep a row only when Book Date is on or after **1 April 2026**. That is a fixed cutoff, not a full year and not a rolling twelve months. Set `IMPORT_CUTOFF` (or the date on the import screen) to move it. The file can be a Smartlogics CSV of about 70,000 rows; rows are written in batches of 100. The result reports how many were skipped because they are older, and how many had no book date. Book dates use `DD-Mon-YYYY`, for example `01-Apr-2026`. Closed and Happy Calling Done are stored as finished history. Do not commit a customer export to the repo. Uploaded files stay in `data/imports`, which is gitignored.
+
 ## Serial numbers
 
 A serial is optional at booking. If it is missing, tick **Serial not available** and choose a reason (sticker missing or damaged, customer not at site, scheme beneficiary, or other). The ticket is stored with a null serial and **Serial pending**. Junk such as `0`, `1234` or repeated digits is rejected and never stored.

@@ -6,12 +6,13 @@ import { HttpError } from "./http";
 import { nextTicketNo, rememberTicket } from "./ticket-seq";
 import { parseCsv } from "@/lib/csv";
 import { suggestMapping, COMPLAINT_FIELDS, CUSTOMER_FIELDS, PRODUCT_FIELDS, USER_FIELDS } from "@/lib/import-map";
-import { normalizeCallType, normalizePriority, normalizeSource, normalizeStatus, labelOf, STATUSES, DEFAULT_SLA_HOURS } from "@/lib/labels";
+import { normalizeCallType, normalizePriority, normalizeSource, labelOf, STATUSES, DEFAULT_SLA_HOURS } from "@/lib/labels";
 import { validateSerial } from "@/lib/quality";
 import { companyCodeForCategory } from "@/lib/company-tag";
 import { ensureAsset, ensureCustomer, relinkAsset } from "./link";
 import { normalizePhone } from "@/lib/mask";
 import { parseLooseDate } from "@/lib/time";
+import { IMPORT_BATCH, classifyHistoryDate, closedHistory, resolveHistoryCutoff, tallyHistory } from "@/lib/import-cutoff";
 import type { SessionUser } from "@/lib/types";
 import bcrypt from "bcryptjs";
 
@@ -24,13 +25,21 @@ export async function previewImport(fileName: string, bytes: Buffer) {
   await writeFile(stored, bytes);
   await writeFile(`${stored}.name`, fileName);
   const table = await readTable(stored, fileName);
-  if (table.rows.length > 20000) throw new HttpError(400, "This file has more than 20,000 rows. Split it and import in parts.");
+  if (table.rows.length > 100000) throw new HttpError(400, "This file has more than 100,000 rows.");
+  const mapping = suggestMapping(table.headers);
+  const cutoff = resolveHistoryCutoff(undefined, process.env.IMPORT_CUTOFF);
+  const bookHeader = Object.entries(mapping).find(([, field]) => field === "bookDate")?.[0];
+  const dates = tallyHistory(bookHeader ? table.rows.map((row) => row[bookHeader]) : [], cutoff);
   return {
     token,
     headers: table.headers,
     sample: table.rows.slice(0, 8),
     rowCount: table.rows.length,
-    mapping: suggestMapping(table.headers),
+    cutoff: process.env.IMPORT_CUTOFF || "2026-04-01",
+    eligible: bookHeader ? dates.keep : table.rows.length,
+    skipped: bookHeader ? dates.skipped : 0,
+    undated: bookHeader ? dates.undated : 0,
+    mapping,
     entities: {
       complaints: COMPLAINT_FIELDS,
       customers: CUSTOMER_FIELDS,
@@ -77,13 +86,13 @@ function mapped(row: Record<string, string>, mapping: Record<string, string>) {
   return out;
 }
 
-export async function commitImport(user: SessionUser, input: { token: string; entity: string; mapping: Record<string, string>; companyId?: string }) {
+export async function commitImport(user: SessionUser, input: { token: string; entity: string; mapping: Record<string, string>; companyId?: string; cutoff?: string }) {
   if (!user.caps.import) throw new HttpError(403, "You cannot import");
   const file = path.join(dir(), path.basename(input.token));
   const fileName = await readFile(`${file}.name`, "utf8").catch(() => "upload.csv");
   const table = await readTable(file, fileName);
   const rows = table.rows.map((row) => mapped(row, input.mapping));
-  if (input.entity === "complaints") return importComplaints(user, rows, input.companyId);
+  if (input.entity === "complaints") return importComplaints(user, rows, input.companyId, resolveHistoryCutoff(input.cutoff, process.env.IMPORT_CUTOFF));
   if (input.entity === "customers") return importCustomers(rows, input.companyId);
   if (input.entity === "products") return importProducts(rows, input.companyId);
   if (input.entity === "users") {
@@ -105,7 +114,7 @@ async function companyByCode(code?: string | null, fallback?: string) {
   return prisma.company.findFirst({ where: { code: "PUMPS" } });
 }
 
-async function importComplaints(user: SessionUser, rows: Record<string, string>[], companyId?: string) {
+async function importComplaints(user: SessionUser, rows: Record<string, string>[], companyId: string | undefined, cutoff: Date) {
   const states = await prisma.state.findMany({ include: { districts: { include: { areas: true } } } });
   const stateByName = new Map(states.map((state) => [state.name.toLowerCase(), state]));
   const brands = await prisma.brand.findMany();
@@ -114,11 +123,35 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
   const issues = await prisma.complaintIssue.findMany();
   let created = 0;
   let updated = 0;
+  let skipped = 0;
+  let undated = 0;
   const errors: string[] = [];
-  for (const [index, row] of rows.entries()) {
+  const assetIds = new Set<string>();
+  const companyCache = new Map<string, Awaited<ReturnType<typeof companyByCode>>>();
+  for (let start = 0; start < rows.length; start += IMPORT_BATCH) {
+    const batch = rows.slice(start, start + IMPORT_BATCH);
+    for (let offset = 0; offset < batch.length; offset++) {
+    const index = start + offset;
+    const row = batch[offset];
+    const bookDate = parseLooseDate(row.bookDate);
+    const decision = classifyHistoryDate(bookDate, cutoff);
+    if (decision === "before-cutoff") {
+      skipped++;
+      continue;
+    }
+    if (decision === "no-date" || !bookDate) {
+      undated++;
+      errors.push(`Row ${index + 2}: Book date is missing or not DD-Mon-YYYY`);
+      continue;
+    }
     try {
-      const company = await companyForProductText([row.categoryName, row.productDetails, row.schemeName].filter(Boolean).join(" "))
-        ?? await companyByCode(row.companyCode, companyId);
+      const companyKey = [row.categoryName, row.productDetails, row.schemeName, row.companyCode, companyId].join("|");
+      let company = companyCache.get(companyKey);
+      if (company === undefined) {
+        company = await companyForProductText([row.categoryName, row.productDetails, row.schemeName, row.requestSubtype].filter(Boolean).join(" "))
+          ?? await companyByCode(row.companyCode, companyId);
+        companyCache.set(companyKey, company);
+      }
       if (!company) throw new Error("Company is missing");
       const phone = normalizePhone(row.phone);
       if (!row.customerName || phone.length < 8) throw new Error("Customer and mobile are required");
@@ -127,10 +160,13 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
       const area = district?.areas.find((item) => item.name.toLowerCase() === (row.areaName ?? "").trim().toLowerCase());
       const brand = brands.find((item) => item.companyId === company.id && item.name.toLowerCase() === (row.brandName ?? "").trim().toLowerCase());
       const product = products.find((item) => item.companyId === company.id && (item.name.toLowerCase() === (row.productDetails ?? "").trim().toLowerCase() || (row.productDetails ?? "").toLowerCase().includes(item.name.toLowerCase())));
-      const engineer = engineers.find((item) => item.companyId === company.id && item.name.toLowerCase() === (row.assignedName ?? "").trim().toLowerCase());
+      const assignedName = (row.assignedName || row.autoAssigned || "").trim();
+      const employeeCode = (row.employeeCode || "").trim().toLowerCase();
+      const engineer = engineers.find((item) => employeeCode && item.employeeCode?.toLowerCase() === employeeCode)
+        ?? engineers.find((item) => item.companyId === company.id && item.name.toLowerCase() === assignedName.toLowerCase());
       const nature = issues.find((item) => item.name.toLowerCase() === (row.natureText ?? "").trim().toLowerCase());
-      const bookDate = parseLooseDate(row.bookDate) ?? new Date();
-      const status = normalizeStatus(row.status) ?? "OPEN";
+      const history = closedHistory(row.status);
+      const status = history.status;
       const callType = normalizeCallType(row.callType);
       const hours = DEFAULT_SLA_HOURS[callType] ?? 72;
       const serialChecked = (row.serialNo || "").trim()
@@ -148,6 +184,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         areaId: area?.id,
         pincode: row.pincode || null,
         village: area?.name ?? row.areaName,
+        altPhone: row.altPhone || null,
       });
       const customer = party.customer;
       const asset = await ensureAsset(prisma, {
@@ -168,6 +205,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         customerId: customer.id,
         customerName: row.customerName,
         phone,
+        altPhone: row.altPhone ? normalizePhone(row.altPhone) : null,
         address: row.address || null,
         stateId: state?.id,
         districtId: district?.id,
@@ -192,8 +230,16 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         priority: normalizePriority(row.priority),
         status,
         finalStatus: row.finalStatus || labelOf(STATUSES, status),
+        closedAt: history.closed ? bookDate : null,
+        happyAt: history.happy ? bookDate : null,
+        happyRating: /^[1-5]$/.test((row.happyCode || "").trim()) ? Number(row.happyCode) : null,
+        happyRemarks: row.happyCode && !/^[1-5]$/.test(row.happyCode.trim()) ? row.happyCode.trim() : null,
+        holdReason: row.pendingReason || null,
+        actualProblem: row.actualProblem || null,
+        actualSolution: row.actualSolution || null,
+        problemNote: [row.customerRemark, row.technicianRemark, row.technicianAction, row.msedclRequestStatus, row.requestSubtype].filter(Boolean).join(" · ") || null,
         engineerId: engineer?.id,
-        assignedName: engineer?.name ?? row.assignedName,
+        assignedName: engineer?.name ?? assignedName,
         assignedAt: engineer ? bookDate : null,
         brandId: brand?.id,
         brandName: brand?.name ?? row.brandName,
@@ -221,13 +267,19 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         await prisma.complaint.create({ data: { ...data, ticketNo: fresh } });
         created++;
       }
-      await relinkAsset(prisma, asset.id);
+      assetIds.add(asset.id);
     } catch (error) {
       errors.push(`Row ${index + 2}: ${error instanceof Error ? error.message : "failed"}`);
     }
+    }
+  }
+  const linked = [...assetIds];
+  for (let start = 0; start < linked.length; start += IMPORT_BATCH) {
+    const slice = linked.slice(start, start + IMPORT_BATCH);
+    for (const assetId of slice) await relinkAsset(prisma, assetId);
   }
   await bumpVersion();
-  return { created, updated, errors: errors.slice(0, 20) };
+  return { created, updated, skipped, undated, cutoff: cutoff.toISOString(), errors: errors.slice(0, 20) };
 }
 
 async function importCustomers(rows: Record<string, string>[], companyId?: string) {
