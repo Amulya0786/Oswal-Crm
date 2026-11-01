@@ -26,7 +26,7 @@ function bucket() {
 async function client() {
   const { S3Client } = await import("@aws-sdk/client-s3");
   return new S3Client({
-    region: process.env.S3_REGION || "blr1",
+    region: process.env.S3_REGION || "sgp1",
     endpoint: process.env.S3_ENDPOINT,
     forcePathStyle: false,
     credentials: {

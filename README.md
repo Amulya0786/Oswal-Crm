@@ -10,22 +10,22 @@ The app and the database run in **Bangalore**. Deploy the branch `cursor/oswal-s
 
 1. Create a DigitalOcean account and sign in at [cloud.digitalocean.com](https://cloud.digitalocean.com).
 2. Connect GitHub when asked, and authorize **Amulya0786/Oswal-Crm**.
-3. Create a Space before the app: **Spaces** → **Create**. Datacenter **Bangalore (BLR1)**. Name it `oswal-service-files`. Leave it **private** (restrict file listing). Then **API** → **Spaces Keys** → generate a key with read and write. Copy the key and the secret. You will not see the secret again.
+3. The Space **oswal-service-files** is in **Singapore (SGP1)**, not Bangalore. Leave it private (restrict file listing). Under **API** → **Spaces Keys**, generate a key with read and write if you do not already have one. Copy the key and the secret. You will not see the secret again.
 4. Open the button above, or choose **Create** → **Apps** → **GitHub** and pick **Amulya0786/Oswal-Crm**, branch **cursor/oswal-service-crm-5f17**. DigitalOcean reads `.do/app.yaml`.
-5. Check the region is **Bangalore**. The spec creates a web service and a managed Postgres 16 database in that region, and a pre-deploy step that runs the migrations and the first-admin setup.
+5. Check the app region is **Bangalore**. The spec creates a web service and attaches the managed Postgres cluster `oswal-pg` in that region. A pre-deploy step runs the migrations and the first-admin setup. The database keeps its own default database name and user.
 6. On the environment screen, replace the placeholders:
    - `ADMIN_EMAIL`: the owner’s email.
    - `ADMIN_INITIAL_PASSWORD`: at least 8 characters.
    - `AUTH_SECRET`, `CRON_SECRET`, `OSWAL_API_KEY`: three long random strings. A password manager can make them. Anything starting with `enter-` is rejected.
    - `S3_ACCESS_KEY` and `S3_SECRET_KEY`: the Spaces key from step 3.
-   - Leave `S3_ENDPOINT` as `https://blr1.digitaloceanspaces.com`, `S3_REGION` as `blr1`, and `S3_BUCKET` as `oswal-service-files` unless the Space has another name.
+   - Leave `S3_ENDPOINT` as `https://sgp1.digitaloceanspaces.com`, `S3_REGION` as `sgp1`, and `S3_BUCKET` as `oswal-service-files`. `APP_URL` is filled in by DigitalOcean.
    - Leave WhatsApp, SMS, speech, AI and push empty.
 7. Deploy. The first build uses the Dockerfile. Before the site goes live, the migrate job updates the database. If the admin email or password is still a placeholder, that job stops and the log says what to fill in. Fix it and redeploy.
 8. The URL is on the app page. It looks like `https://oswal-service-xxxxx.ondigitalocean.app`. Open it and sign in with the email and password you entered.
 9. The desk asks for a new password before anything else. After that, clear `ADMIN_INITIAL_PASSWORD` in the app’s environment so the starting password is not kept there.
-10. Set `APP_URL` to that same `https://…ondigitalocean.app` address so tracking links use it. Health is `https://<your-url>/api/health` and should answer `{"ok":true}`.
+10. Health is `https://<your-url>/api/health` and should answer `{"ok":true}`. Tracking links use `APP_URL`, which DigitalOcean sets to the live address.
 
-Photos, signatures, voice notes and import files go to the private Space. A download link is a short-lived signed URL. Without the Space keys, files stay on the container disk and disappear on the next deploy. Local development still uses the `data/` folder.
+Photos, signatures, voice notes and import files go to the private Space in Singapore. A download link is a short-lived signed URL. Without the Space keys, files stay on the container disk and disappear on the next deploy. Local development still uses the `data/` folder. The app and the database stay in Bangalore.
 
 WhatsApp, SMS, speech, AI and phone push stay in log or mock mode until those keys are added later. Nothing is sent out.
 
@@ -37,7 +37,7 @@ When IT is ready for `service.oswalpumps.com`:
 2. DigitalOcean shows a hostname such as `oswal-service-xxxxx.ondigitalocean.app`.
 3. IT adds a DNS record: **CNAME** `service` → that `ondigitalocean.app` hostname.
 4. Wait until the certificate is issued.
-5. Change `APP_URL` to `https://service.oswalpumps.com` and redeploy, so tracking links use that name.
+5. Make `service.oswalpumps.com` the primary domain. `APP_URL` is tied to the app URL, so tracking links pick up that name on the next deploy.
 
 ### What it costs
 

@@ -25,7 +25,7 @@ function assertProductionSecrets() {
   }
   const spacesKey = process.env.S3_ACCESS_KEY ?? "";
   if (!spacesKey || spacesKey.startsWith("enter-")) {
-    console.error("S3_ACCESS_KEY and S3_SECRET_KEY are not set. Photos will not survive a redeploy until the Bangalore Space keys are pasted in.");
+    console.error("S3_ACCESS_KEY and S3_SECRET_KEY are not set. Photos will not survive a redeploy until the Singapore Space keys are pasted in.");
   }
 }
 

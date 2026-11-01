@@ -20,13 +20,13 @@ describe("file storage", () => {
     expect(spacesConfigured({})).toBe(false);
     expect(spacesConfigured({
       S3_BUCKET: "oswal-service-files",
-      S3_ENDPOINT: "https://blr1.digitaloceanspaces.com",
+      S3_ENDPOINT: "https://sgp1.digitaloceanspaces.com",
       S3_ACCESS_KEY: "enter-spaces-key",
       S3_SECRET_KEY: "enter-spaces-secret",
     })).toBe(false);
     expect(spacesConfigured({
       S3_BUCKET: "oswal-service-files",
-      S3_ENDPOINT: "https://blr1.digitaloceanspaces.com",
+      S3_ENDPOINT: "https://sgp1.digitaloceanspaces.com",
       S3_ACCESS_KEY: "DO00realkey",
       S3_SECRET_KEY: "a-real-spaces-secret",
     })).toBe(true);

@@ -1,5 +1,6 @@
-# DigitalOcean App Platform. Bangalore (blr). Data stays in India.
-# Photos go to a private Space in blr1. WhatsApp, SMS, speech, AI and push are left unset.
+# DigitalOcean App Platform. App and database in Bangalore (blr).
+# Photos go to the private Space oswal-service-files in Singapore (sgp1).
+# WhatsApp, SMS, speech, AI and push are left unset.
 name: oswal-service
 region: blr
 
@@ -39,13 +40,14 @@ databases:
     version: "16"
     production: true
     cluster_name: oswal-pg
-    db_name: oswal
-    db_user: oswal
 
 envs:
   - key: DATABASE_URL
     scope: RUN_TIME
     value: ${oswal-db.DATABASE_URL}
+  - key: APP_URL
+    scope: RUN_TIME
+    value: ${APP_URL}
   - key: IMPORT_CUTOFF
     scope: RUN_TIME
     value: "2026-04-01"
@@ -57,10 +59,10 @@ envs:
     value: "1"
   - key: S3_ENDPOINT
     scope: RUN_TIME
-    value: https://blr1.digitaloceanspaces.com
+    value: https://sgp1.digitaloceanspaces.com
   - key: S3_REGION
     scope: RUN_TIME
-    value: blr1
+    value: sgp1
   - key: S3_BUCKET
     scope: RUN_TIME
     value: oswal-service-files
