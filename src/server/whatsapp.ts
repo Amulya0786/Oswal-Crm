@@ -3,6 +3,7 @@ import { normalizePhone } from "@/lib/mask";
 import { allowSend, classifyInbound, renderWhatsApp, statusReply, type Lang, type WhatsAppEvent } from "@/lib/phase2";
 import { parseRating, ratingNeedsEscalation } from "@/lib/phase3";
 import { labelOf, STATUSES } from "@/lib/labels";
+import { runChat } from "./chat";
 
 export function whatsAppMode(): "meta" | "bsp" | "log" {
   if (process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID) return "meta";
@@ -162,14 +163,18 @@ export async function handleWhatsAppWebhook(payload: unknown) {
     await prisma.whatsAppOptOut.deleteMany({ where: { phoneNorm: phone } });
     return { ok: true, optin: true };
   }
+  if (kind.kind !== "ticket" && kind.kind !== "phone") {
+    const chat = await runChat(phone, message.text);
+    for (const line of chat.messages) await sendWhatsApp({ event: "STATUS", to: phone, body: line });
+    return { ok: true, chat: chat.action };
+  }
   const complaint = kind.kind === "ticket"
     ? await prisma.complaint.findUnique({ where: { ticketNo: kind.ticketNo } })
-    : kind.kind === "phone"
-      ? await prisma.complaint.findFirst({ where: { phone: kind.phone }, orderBy: { bookDate: "desc" } })
-      : null;
+    : await prisma.complaint.findFirst({ where: { phone: kind.kind === "phone" ? kind.phone : phone }, orderBy: { bookDate: "desc" } });
   if (!complaint) {
-    await sendWhatsApp({ event: "STATUS", to: phone, body: "Oswal: send the Comp. No (OPL…) or the registered mobile to check a complaint." });
-    return { ok: true, found: false };
+    const chat = await runChat(phone, message.text);
+    for (const line of chat.messages) await sendWhatsApp({ event: "STATUS", to: phone, body: line });
+    return { ok: true, found: false, chat: chat.action };
   }
   const body = statusReply("en", { ticketNo: complaint.ticketNo, status: labelOf(STATUSES, complaint.status), engineer: complaint.assignedName });
   await sendWhatsApp({ event: "STATUS", to: phone, body, complaintId: complaint.id, companyId: complaint.companyId });

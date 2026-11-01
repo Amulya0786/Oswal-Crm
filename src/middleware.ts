@@ -11,6 +11,8 @@ const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/openapi",
   "/api/cron",
+  "/api/report",
+  "/chat",
 ];
 
 export function middleware(request: NextRequest) {

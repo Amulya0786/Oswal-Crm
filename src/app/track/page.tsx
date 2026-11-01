@@ -47,7 +47,9 @@ export default function TrackPage() {
           <p className="kicker">{result.legalName}</p>
           <h2 className="mono">{result.ticketNo}</h2>
           <p>{result.status} · {result.callType}</p>
-          <p>{result.customerName}</p>
+          <p>Technician: {result.technicianFirst ?? "Not assigned yet"}</p>
+          <p>Expected visit: {result.scheduleDate ? new Date(result.scheduleDate).toLocaleDateString("en-IN") : "Not scheduled yet"}</p>
+          <p>{result.feedbackPending ? "You can rate this visit from 1 to 5 on WhatsApp." : result.happyRating ? `Rated ${result.happyRating}/5` : "A rating opens after the visit is closed."}</p>
           <ul className="timeline">{result.events.map((event: any, index: number) => <li key={index}>{event.message}</li>)}</ul>
         </section>
       )}

@@ -81,3 +81,15 @@ These stay in log or mock mode until the key is set. Nothing is sent to a real m
 | `AI_API_KEY` | Booking hints, fix steps, the daily management note, plain-language questions, SLA risk wording, and timeline summaries. Without it those answers are a local mock. |
 
 `STORAGE_DIR` is the object-storage stand-in. Development writes files to disk.
+
+## Technician phone app
+
+The Android and iOS projects live in `mobile/`. See `mobile/README.md` for the Play Store and TestFlight steps. Google Play Developer and Apple Developer accounts are required for store builds. Push stays a log until `FCM_SERVER_KEY` or `APNS_KEY_ID` is set.
+
+## Customer tracking and WhatsApp menu
+
+A booking message includes `/track/<token>`. The same status is available from `/track` with the Comp. No, mobile and OTP. The WhatsApp webhook understands a small menu: book, status, or ask for a call back. Booking uses the same company rule as the desk. Without WhatsApp keys the replies are only logged.
+
+## Power BI and Excel
+
+Admins open **Power BI** and create a reporting key. The page shows the Web and OData addresses. Excel uses Data → From Web. Power BI uses Get data → OData or Web. Revoking a key stops that feed. The key is shown once.

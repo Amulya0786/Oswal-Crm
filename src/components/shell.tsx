@@ -28,13 +28,14 @@ const GROUPS = [
     { href: "/security", label: "Security", icon: Shield },
     { href: "/import", label: "Import", icon: Upload },
     { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/connect", label: "Power BI", icon: BarChart3 },
   ] },
 ];
 
 const CRUMB: Record<string, string> = {
   complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
   security: "Security", import: "Import", settings: "Settings", attendance: "Attendance",
-  exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings",
+  exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings", connect: "Power BI",
 };
 
 export function Shell({ user, scope, version, children }: { user: SessionUser; scope: string; version: number; children: React.ReactNode }) {
@@ -51,7 +52,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   const groups = GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
-      if (item.href === "/security" || item.href === "/import" || item.href === "/settings") return user.caps.security;
+      if (item.href === "/security" || item.href === "/import" || item.href === "/settings" || item.href === "/connect") return user.caps.security;
       if (item.href === "/reports" || item.href === "/performance" || item.href === "/reports/daily") return user.caps.report || user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
       return true;

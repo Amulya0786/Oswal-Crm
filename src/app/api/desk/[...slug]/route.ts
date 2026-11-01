@@ -17,6 +17,7 @@ import { loadScorecards, scorecardPdf, scorecardWorkbook } from "@/server/scorec
 import { askTickets, bookingHint, dailyAiSummary, fixHints, summariseComplaint } from "@/server/ai";
 import { storeAudio, transcribe } from "@/server/speech";
 import { DEFAULT_SLABS, DEFAULT_WEIGHTS, incentiveFor, performanceScore } from "@/lib/phase3";
+import { issueReportKey } from "@/lib/report-key";
 import { normalizePhone, displayPhone } from "@/lib/mask";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 
@@ -99,6 +100,23 @@ async function route(method: string, slug: string[], req: Request) {
       update: { requirePhoto: Boolean(body.requirePhoto), requireIdentity: Boolean(body.requireIdentity), requireGps: Boolean(body.requireGps), maxKm: Number(body.maxKm ?? 15) },
     });
     return json(saved);
+  }
+
+  if (head === "report-keys" && !user.caps.security) return json({ error: "Admins only" }, 403);
+  if (method === "GET" && head === "report-keys") {
+    const keys = await prisma.reportKey.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+    return json({ keys });
+  }
+  if (method === "POST" && head === "report-keys") {
+    const body = await readJson(req);
+    const issued = issueReportKey();
+    const row = await prisma.reportKey.create({ data: { name: String(body.name || "Report"), keyHash: issued.hash, prefix: issued.prefix } });
+    return json({ key: issued.key, row });
+  }
+  if (method === "DELETE" && head === "report-keys") {
+    const body = await readJson(req);
+    await prisma.reportKey.update({ where: { id: String(body.id) }, data: { revokedAt: new Date() } });
+    return json({ ok: true });
   }
 
   if (method === "GET" && head === "assist") return json(await dailyAiSummary());

@@ -75,9 +75,29 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
         accent: complaint.company.accent,
         legalName: complaint.company.legalName,
         assignedName: complaint.assignedName,
+        technicianFirst: complaint.assignedName?.split(" ")[0] ?? null,
         scheduleDate: complaint.scheduleDate,
+        happyRating: complaint.happyRating,
+        feedbackPending: complaint.feedbackPending,
         events: complaint.events.filter((event) => ["CREATED", "ASSIGNED", "REASSIGNED", "CLOSED", "HAPPY", "CANCELLED", "VISIT"].includes(event.type)).map((event) => ({ at: event.at, message: event.message })),
       });
+    }
+    if (slug[0] === "rate") {
+      const token = String(body.token ?? "");
+      const rating = Number(body.rating);
+      const complaint = await prisma.complaint.findFirst({ where: { OR: [{ trackToken: token }, { ticketNo: token.toUpperCase() }] } });
+      if (!complaint) return json({ error: "Complaint not found" }, 404);
+      if (!complaint.feedbackPending && complaint.happyRating == null) return json({ error: "Rating opens after the visit is closed" }, 400);
+      if (rating < 1 || rating > 5) return json({ error: "Choose 1 to 5" }, 400);
+      await prisma.complaint.update({
+        where: { id: complaint.id },
+        data: { happyRating: rating, happyRemarks: String(body.comment ?? "") || null, happyAt: new Date(), feedbackPending: false, status: complaint.status === "CLOSED" ? "HAPPY_CALLING" : complaint.status },
+      });
+      if (rating <= 2) {
+        const manager = await prisma.user.findFirst({ where: { role: { in: ["AREA_MANAGER", "STATE_HEAD", "ADMIN"] }, active: true } });
+        await prisma.escalationLog.create({ data: { complaintId: complaint.id, fromLevel: complaint.escalationLevel, toLevel: complaint.escalationLevel + 1, toUserId: manager?.id, toName: manager?.name ?? "Service manager", message: `Low feedback ${rating}/5 on ${complaint.ticketNo}` } });
+      }
+      return json({ ok: true });
     }
     if (slug[0] === "whatsapp") return json(await handleWhatsAppWebhook(body));
     if (slug[0] === "otp-book") {

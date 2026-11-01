@@ -17,6 +17,7 @@ import { displayPhone } from "@/lib/mask";
 import { formatDay } from "@/lib/time";
 import type { SessionUser } from "@/lib/types";
 import { parseTicketNo } from "@/lib/ticket";
+import { issueTrackToken } from "@/lib/report-key";
 
 const active = new Set<string>(ACTIVE_STATUSES);
 
@@ -176,7 +177,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
   const hours = await slaHours(company.id, input.callType);
   const bookDate = new Date();
   const scheduleDate = clean(input.scheduleDate) ? new Date(input.scheduleDate!) : null;
-  const source = opts?.publicForm ? (input.source === "QR" ? "QR" : "WEB") : user?.role === "DEALER" ? "DEALER" : input.source || "CALL";
+  const source = opts?.publicForm ? (input.source === "QR" ? "QR" : input.source === "WHATSAPP" ? "WHATSAPP" : "WEB") : user?.role === "DEALER" ? "DEALER" : input.source || "CALL";
   const status = engineer ? "ASSIGNED" : "OPEN";
   const actorName = user?.name ?? (source === "QR" ? "QR link" : "Web form");
 
@@ -210,6 +211,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     const complaint = await tx.complaint.create({
       data: {
         ticketNo,
+        trackToken: issueTrackToken(),
         companyId: company.id,
         bookDate,
         scheduleDate,
@@ -327,7 +329,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     engineer: created.assignedName ?? "",
     engineerPhone: engineer?.phone ?? "",
     scheduleDate: created.scheduleDate ? formatDay(created.scheduleDate) : "soon",
-    link: `${process.env.APP_URL ?? "http://localhost:3000"}/track?ticket=${created.ticketNo}`,
+    link: `${process.env.APP_URL ?? "http://localhost:3000"}/track/${created.trackToken ?? created.ticketNo}`,
     otp: "",
   };
   await notifyWhatsAppEvent("REGISTERED", { phone: created.phone, companyId: company.id, complaintId: created.id, vars });

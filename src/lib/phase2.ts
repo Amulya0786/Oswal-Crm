@@ -16,8 +16,8 @@ export type Lang = "en" | "hi";
 
 const COPY: Record<WhatsAppEvent, Record<Lang, string>> = {
   REGISTERED: {
-    en: "Oswal: complaint {{ticketNo}} is registered for {{customerName}}. We will assign a technician shortly.",
-    hi: "ओसवाल: शिकायत {{ticketNo}} {{customerName}} के नाम दर्ज हो गई है। जल्द ही तकनीशियन नियुक्त होगा।",
+    en: "Oswal: complaint {{ticketNo}} is registered for {{customerName}}. Track it: {{link}}",
+    hi: "ओसवाल: शिकायत {{ticketNo}} {{customerName}} के नाम दर्ज हो गई है। स्थिति: {{link}}",
   },
   ASSIGNED: {
     en: "Oswal: {{ticketNo}} is assigned to {{engineer}} ({{engineerPhone}}). Expected visit {{scheduleDate}}.",

@@ -427,6 +427,7 @@ model DataVersion {
 model Complaint {
   id                String    @id @default(cuid())
   ticketNo          String    @unique
+  trackToken        String?   @unique
   companyId         String
   bookDate          DateTime
   scheduleDate      DateTime?
@@ -912,4 +913,32 @@ model CallLog {
 
   @@index([phone, at])
   @@index([complaintId])
+}
+
+model WhatsAppSession {
+  phone     String   @id
+  lang      String   @default("en")
+  step      String   @default("menu")
+  draft     String   @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model Callback {
+  id        String   @id @default(cuid())
+  phone     String
+  name      String?
+  note      String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+}
+
+model ReportKey {
+  id        String    @id @default(cuid())
+  name      String
+  keyHash   String    @unique
+  prefix    String
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
 }
