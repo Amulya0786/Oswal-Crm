@@ -51,8 +51,8 @@ export const MASTER_DEFS: MasterDef[] = [
   {
     key: "engineers", title: "Engineer / service centre", group: "People", model: "engineer", companyScoped: true, search: ["name", "phone"], orderBy: "name",
     include: { company: true, district: true },
-    fields: [select("companyId", "Company", "companies", true), text("name", "Name", true), text("phone", "Mobile"), text("kind", "Type (ENGINEER or SERVICE_CENTER)", true), select("stateId", "State", "states"), select("districtId", "District", "districts"), text("pincodes", "Pincodes"), text("skills", "Skills")],
-    present: (row) => ({ Company: row.company?.shortName ?? "", Name: row.name, Type: row.kind, District: row.district?.name ?? "", Pincodes: row.pincodes }),
+    fields: [select("companyId", "Company", "companies", true), text("name", "Name", true), text("phone", "Mobile"), text("employeeCode", "Employee code"), text("kind", "Type (ENGINEER or SERVICE_CENTER)", true), select("stateId", "State", "states"), select("districtId", "District", "districts"), text("pincodes", "Pincodes"), text("skills", "Skills")],
+    present: (row) => ({ Company: row.company?.shortName ?? "", Name: row.name, "Employee code": row.employeeCode ?? "", Type: row.kind, District: row.district?.name ?? "", Pincodes: row.pincodes }),
   },
   { key: "brands", title: "Brand", group: "People", model: "brand", companyScoped: true, search: ["name"], orderBy: "name", include: { company: true }, fields: [select("companyId", "Company", "companies", true), text("name", "Brand", true)], present: (row) => ({ Company: row.company?.shortName ?? "", Brand: row.name }) },
   { key: "schemes", title: "Scheme", group: "Complaint setup", model: "scheme", search: ["name"], orderBy: "name", fields: [text("name", "Scheme", true)], present: (row) => ({ Scheme: row.name }) },

@@ -102,7 +102,7 @@ export function normalizeStatus(input: string | null | undefined): string | null
     "re-assigned": "REASSIGNED",
     "re assigned": "REASSIGNED",
     reassigned: "REASSIGNED",
-    pending: "PENDING",
+    pending: "OPEN",
     closed: "CLOSED",
     "closed - unverified": "CLOSED_UNVERIFIED",
     "closed unverified": "CLOSED_UNVERIFIED",

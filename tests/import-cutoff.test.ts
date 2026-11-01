@@ -52,6 +52,12 @@ describe("history cutoff", () => {
     expect(openImportStatus("Pending")).toEqual({ status: "OPEN", closed: false, happy: false });
     expect(openImportStatus("Assigned").status).toBe("ASSIGNED");
     expect(openImportStatus("Job on Hold").status).toBe("PENDING");
+    expect(suggestMapping(["Reason Pending", "OEM", "Actual Problem", "Actual Solution"])).toMatchObject({
+      "Reason Pending": "pendingReason",
+      OEM: "brandName",
+      "Actual Problem": "actualProblem",
+      "Actual Solution": "actualSolution",
+    });
   });
 
   it("maps the Smartlogics export columns and batches the file", () => {

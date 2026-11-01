@@ -3,6 +3,8 @@ import { normalizeStatus } from "./labels";
 
 /** History starts on this book date. Not a rolling year. */
 export const DEFAULT_HISTORY_CUTOFF = "2026-04-01";
+/** Open SmartLogics tickets can be older than the closed-history cutoff, back to this day. */
+export const OPEN_IMPORT_FLOOR = "2024-01-01";
 
 export const IMPORT_BATCH = 100;
 

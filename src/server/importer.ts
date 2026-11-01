@@ -1,16 +1,17 @@
 import path from "path";
 import { prisma, bumpVersion } from "./db";
 import { HttpError } from "./http";
-import { nextTicketNo, rememberTicket } from "./ticket-seq";
+import { nextTicketNo } from "./ticket-seq";
 import { parseCsv } from "@/lib/csv";
 import { suggestMapping, COMPLAINT_FIELDS, CUSTOMER_FIELDS, PRODUCT_FIELDS, USER_FIELDS } from "@/lib/import-map";
 import { normalizeCallType, normalizePriority, normalizeSource, labelOf, STATUSES, DEFAULT_SLA_HOURS, FIRST_CONTACT_HOURS } from "@/lib/labels";
 import { validateSerial } from "@/lib/quality";
 import { companyCodeForCategory } from "@/lib/company-tag";
-import { ensureAsset, ensureCustomer, relinkAsset } from "./link";
 import { normalizePhone } from "@/lib/mask";
 import { parseLooseDate } from "@/lib/time";
-import { IMPORT_BATCH, classifyHistoryDate, openImportStatus, resolveHistoryCutoff, tallyHistory } from "@/lib/import-cutoff";
+import { IMPORT_BATCH, OPEN_IMPORT_FLOOR, classifyHistoryDate, openImportStatus, resolveHistoryCutoff, tallyHistory } from "@/lib/import-cutoff";
+import { parseTicketNo } from "@/lib/ticket";
+import { ensureCounterAtLeast } from "./ticket-seq";
 import type { SessionUser } from "@/lib/types";
 import bcrypt from "bcryptjs";
 import { loadObject, saveObject } from "./storage";
@@ -165,16 +166,26 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
   let skipped = 0;
   let undated = 0;
   const errors: string[] = [];
-  const assetIds = new Set<string>();
   const areaCache = new Map<string, { id: string; name: string } | null>();
   const companyCache = new Map<string, Awaited<ReturnType<typeof companyByCode>>>();
+  const customerCache = new Map<string, { id: string }>();
+  const assetCache = new Map<string, { id: string }>();
+  const categoryNames = new Set((await prisma.category.findMany({ select: { name: true } })).map((row) => row.name));
+  const seenSeq = new Map<string, number>();
   for (let start = 0; start < rows.length; start += IMPORT_BATCH) {
     const batch = rows.slice(start, start + IMPORT_BATCH);
+    const numbers = batch.map((item) => item.ticketNo?.trim()).filter((value): value is string => Boolean(value));
+    const known = numbers.length
+      ? await prisma.complaint.findMany({ where: { ticketNo: { in: numbers } }, select: { id: true, ticketNo: true } })
+      : [];
+    const existingTickets = new Map(known.map((item) => [item.ticketNo, item.id]));
     for (let offset = 0; offset < batch.length; offset++) {
     const index = start + offset;
     const row = batch[offset];
     const bookDate = parseLooseDate(row.bookDate);
-    const decision = classifyHistoryDate(bookDate, cutoff);
+    const history = openImportStatus(row.status);
+    const rowCutoff = history.closed ? cutoff : resolveHistoryCutoff(OPEN_IMPORT_FLOOR);
+    const decision = classifyHistoryDate(bookDate, rowCutoff);
     if (decision === "before-cutoff") {
       skipped++;
       continue;
@@ -248,43 +259,60 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         issues.push(nature);
       }
       const categoryName = (row.categoryName ?? "").trim();
-      if (categoryName) {
-        const existingCategory = await prisma.category.findUnique({ where: { name: categoryName } });
-        if (!existingCategory) await prisma.category.create({ data: { name: categoryName, companyCode: company.code } });
+      if (categoryName && !categoryNames.has(categoryName)) {
+        categoryNames.add(categoryName);
+        await prisma.category.create({ data: { name: categoryName, companyCode: company.code } }).catch(() => null);
       }
-      const history = openImportStatus(row.status);
       const status = history.status;
       const callType = normalizeCallType(row.callType);
       const hours = DEFAULT_SLA_HOURS[callType] ?? 72;
-      const serialChecked = (row.serialNo || "").trim()
-        ? validateSerial(row.serialNo)
-        : null;
-      if (serialChecked && !serialChecked.ok) throw new Error(serialChecked.reason);
-      const serialNorm = serialChecked && serialChecked.ok ? serialChecked.serial : null;
-      const party = await ensureCustomer(prisma, {
-        companyId: company.id,
-        name: row.customerName,
-        phone,
-        address: row.address || null,
-        stateId: state?.id,
-        districtId: district?.id,
-        areaId: area?.id,
-        pincode: row.pincode || null,
-        village: area?.name ?? row.areaName,
-        altPhone: row.altPhone || null,
-      });
-      const customer = party.customer;
-      const asset = await ensureAsset(prisma, {
-        companyId: company.id,
-        customerId: customer.id,
-        name: row.customerName,
-        phone,
-        productId: product?.id,
-        productName: row.productDetails || product?.name,
-        modelName: product?.name || row.productDetails,
-        serialNorm,
-        capacityLabel: row.capacityLabel || row.hp || null,
-      });
+      const rawSerial = (row.serialNo || "").trim();
+      const serialChecked = rawSerial ? validateSerial(rawSerial) : null;
+      const serialOk = Boolean(serialChecked && serialChecked.ok && serialChecked.serial);
+      const serialNorm = serialOk && serialChecked && serialChecked.ok ? serialChecked.serial : null;
+      const customerKey = `${company.id}|${phone}`;
+      let customer = customerCache.get(customerKey);
+      if (!customer) {
+        customer = await prisma.customer.findFirst({ where: { companyId: company.id, phone }, select: { id: true } })
+          ?? await prisma.customer.create({
+            data: {
+              companyId: company.id,
+              name: row.customerName,
+              phone,
+              phoneNorm: phone,
+              nameNorm: row.customerName.trim().toLowerCase().replace(/\s+/g, " "),
+              address: row.address || null,
+              stateId: state?.id,
+              districtId: district?.id,
+              areaId: area?.id,
+              pincode: row.pincode || null,
+              altPhone: row.altPhone ? normalizePhone(row.altPhone) : null,
+            },
+            select: { id: true },
+          });
+        customerCache.set(customerKey, customer);
+      }
+      const assetKey = `${company.id}|${customer.id}|${serialNorm ?? ""}|${(row.productDetails || product?.name || "").toLowerCase()}`;
+      let asset = assetCache.get(assetKey);
+      if (!asset) {
+        asset = (serialNorm
+          ? await prisma.asset.findFirst({ where: { companyId: company.id, serialNorm }, select: { id: true } })
+          : await prisma.asset.findFirst({ where: { customerId: customer.id, productName: row.productDetails || product?.name || undefined }, select: { id: true } }))
+          ?? await prisma.asset.create({
+            data: {
+              companyId: company.id,
+              customerId: customer.id,
+              productId: product?.id,
+              productName: row.productDetails || product?.name,
+              modelName: product?.name || row.productDetails,
+              serialNorm,
+              capacityLabel: row.capacityLabel || row.hp || null,
+              identityKey: assetKey.slice(0, 180),
+            },
+            select: { id: true },
+          });
+        assetCache.set(assetKey, asset);
+      }
       const data = {
         companyId: company.id,
         bookDate,
@@ -306,10 +334,10 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         productDetails: row.productDetails || product?.name,
         categoryId: product?.categoryId,
         assetId: asset.id,
-        serialNo: serialNorm,
+        serialNo: serialNorm ?? (rawSerial ? rawSerial.slice(0, 60) : null),
         serialNorm,
-        serialPending: !(row.serialNo || "").trim(),
-        serialUnavailableReason: (row.serialNo || "").trim() ? null : "OTHER",
+        serialPending: !serialOk,
+        serialUnavailableReason: serialOk ? null : rawSerial ? "UNVERIFIED" : "OTHER",
         natureId: nature?.id,
         natureText: nature?.name ?? row.natureText,
         source: normalizeSource("call"),
@@ -341,13 +369,14 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
       };
       const ticketNo = row.ticketNo?.trim();
       if (ticketNo) {
-        const existing = await prisma.complaint.findUnique({ where: { ticketNo } });
-        if (existing) {
-          await prisma.complaint.update({ where: { id: existing.id }, data });
+        const existingId = existingTickets.get(ticketNo);
+        if (existingId) {
+          await prisma.complaint.update({ where: { id: existingId }, data });
           updated++;
         } else {
           await prisma.complaint.create({ data: { ...data, ticketNo } });
-          await rememberTicket(ticketNo);
+          const parsed = parseTicketNo(ticketNo);
+          if (parsed) seenSeq.set(parsed.dateKey, Math.max(seenSeq.get(parsed.dateKey) ?? 0, parsed.seq));
           created++;
         }
       } else {
@@ -355,17 +384,12 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         await prisma.complaint.create({ data: { ...data, ticketNo: fresh } });
         created++;
       }
-      assetIds.add(asset.id);
     } catch (error) {
       errors.push(`Row ${index + 2}: ${error instanceof Error ? error.message : "failed"}`);
     }
     }
   }
-  const linked = [...assetIds];
-  for (let start = 0; start < linked.length; start += IMPORT_BATCH) {
-    const slice = linked.slice(start, start + IMPORT_BATCH);
-    for (const assetId of slice) await relinkAsset(prisma, assetId);
-  }
+  for (const [dateKey, seq] of seenSeq) await ensureCounterAtLeast(dateKey, seq);
   await bumpVersion();
   return { created, updated, skipped, undated, cutoff: cutoff.toISOString(), errors: errors.slice(0, 20) };
 }

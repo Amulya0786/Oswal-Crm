@@ -634,7 +634,8 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     notifyEvent = "FEEDBACK";
   } else if (input.action === "cancel") {
     if (!user.caps.cancel) throw new HttpError(403, "You cannot cancel this complaint");
-    if (current.status === "HAPPY_CALLING" || current.status === "CANCELLED") throw new HttpError(400, "This complaint cannot be cancelled");
+    if (current.status === "CANCELLED") throw new HttpError(400, "This complaint is already cancelled");
+    if (current.status === "HAPPY_CALLING" && user.role !== "ADMIN") throw new HttpError(400, "Only an admin can cancel a complaint that is in happy calling");
     const reason = clean(input.cancelReason);
     if (!reason) throw new HttpError(400, "A cancellation needs a reason");
     data.status = "CANCELLED";

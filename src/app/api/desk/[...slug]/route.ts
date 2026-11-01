@@ -1,5 +1,5 @@
 import { loadObject, saveObject, signedObjectUrl } from "@/server/storage";
-import { getScope, rejectTemporaryPassword } from "@/server/auth";
+import { getScope, importTokenOk, rejectTemporaryPassword, userForImport } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
 import { prisma, getVersion } from "@/server/db";
 import { createComplaint, updateComplaint, bulkUpdate, getComplaint } from "@/server/complaints";
@@ -62,11 +62,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ slug: st
 
 async function route(method: string, slug: string[], req: Request) {
   const url = new URL(req.url);
-  const session = await actor();
-  if (!session) return json({ error: "Sign in" }, 401);
-  rejectTemporaryPassword(session.user);
-  const { user, scope } = session;
   const [head, id, extra] = slug;
+  const viaImportToken = head === "import" && importTokenOk(req.headers.get("x-import-token"));
+  const session = (await actor()) ?? (viaImportToken ? await userForImport() : null);
+  if (!session) return json({ error: "Sign in" }, 401);
+  if (!viaImportToken) rejectTemporaryPassword(session.user);
+  const { user, scope } = session;
   const handled = await release3(method, head, id, user, req, url);
   if (handled) return handled;
 

@@ -47,7 +47,10 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
   const [kpi] = await prisma.$queryRaw<{ booked: number; closed: number; pending: number; overdue: number; repeats: number; happy: number; rating: number; first_contact: number }[]>`
     SELECT
       COUNT(*) FILTER (WHERE c."bookDate" >= ${today} AND c."bookDate" < ${tomorrow})::int AS booked,
-      COUNT(*) FILTER (WHERE c.status IN ('CLOSED','CLOSED_UNVERIFIED','HAPPY_CALLING') AND c."closedAt" >= ${today} AND c."closedAt" < ${tomorrow})::int AS closed,
+      COUNT(*) FILTER (WHERE c.status IN ('CLOSED','CLOSED_UNVERIFIED','HAPPY_CALLING') AND (
+        (c."closedAt" >= ${today} AND c."closedAt" < ${tomorrow})
+        OR (c.status = 'HAPPY_CALLING' AND c."happyAt" >= ${today} AND c."happyAt" < ${tomorrow})
+      ))::int AS closed,
       COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS pending,
       COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND COALESCE(c."callbackDueAt", c."slaDueAt") IS NOT NULL AND COALESCE(c."callbackDueAt", c."slaDueAt") <= ${now})::int AS overdue,
       COUNT(*) FILTER (WHERE c."repeatFlag" = true AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS repeats,

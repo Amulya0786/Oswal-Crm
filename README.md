@@ -177,6 +177,12 @@ DigitalOcean managed Postgres takes a daily backup. Restore it once on the stagi
 
 Set `SENTRY_DSN` if you want the app to forward errors. Leave it empty and nothing is sent. `/api/health` checks that Postgres answers.
 
+## Import client
+
+Set `IMPORT_TOKEN` on the app. The import program sends it as the header `x-import-token`. That header is accepted only on `/api/desk/import/preview` and `/api/desk/import/commit`. It does not sign anyone into the desk and it does not need an authenticator. A normal admin login still asks for an authenticator unless `ADMIN_2FA_ENFORCE=0` or `ADMIN_2FA_GRACE_UNTIL` is still in the future.
+
+Send `cutoff` in the commit body when closed history should start earlier than `IMPORT_CUTOFF`. Open tickets are kept back to 1 January 2024 even when the closed-history cutoff stays 1 April 2026.
+
 ## Authenticator during an import
 
 `ADMIN_2FA_ENFORCE` defaults to on. An Admin or State Head who has not set up an authenticator is sent to the setup page and does not get a session. An existing session is not checked again, so a login that already happened keeps working.

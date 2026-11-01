@@ -59,6 +59,8 @@ const ALIASES: Record<string, string> = {
   autoassignmentto: "autoAssigned",
   "auto assignment to": "autoAssigned",
   "actual problem found": "actualProblem",
+  "actual problem": "actualProblem",
+  "actual solution": "actualSolution",
   "solution provided": "actualSolution",
   "happy code": "happyCode",
   finalstatus: "finalStatus",

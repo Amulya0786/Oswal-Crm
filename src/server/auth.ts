@@ -2,6 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "./db";
 import type { Capabilities, CompanyBrief, Role, SessionUser } from "@/lib/types";
 import { ROLES } from "@/lib/types";
@@ -143,6 +144,21 @@ export async function login(email: string, password: string, meta: { ip?: string
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
   return openSession(user.id);
+}
+
+export function importTokenOk(header: string | null) {
+  const expected = process.env.IMPORT_TOKEN ?? "";
+  if (!expected || !header) return false;
+  const left = Buffer.from(header);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+/** Admin user for a trusted import client. The token never grants any other route. */
+export async function userForImport() {
+  const admin = await prisma.user.findFirst({ where: { role: "ADMIN", active: true }, include: userInclude });
+  if (!admin) return null;
+  return { user: toSessionUser(admin), scope: "all" as const };
 }
 
 export async function openSession(userId: string) {
