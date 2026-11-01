@@ -39,9 +39,8 @@ export default function LoginPage() {
       <section className="login-card">
         <form action={onSubmit} className="stack">
           <BrandLogo />
-          <p className="kicker">Oswal Pumps · Oswal Solar</p>
+          <p className="kicker">Oswal Pumps Ltd · Karnal, Haryana</p>
           <h2>Service desk</h2>
-          <p className="muted">Book, assign and close a call. Karnal · Haryana.</p>
           <label className="stack">Email<input name="email" type="email" autoComplete="username" required defaultValue={showDemo ? "admin@oswal.test" : ""} /></label>
           <label className="stack">Password<input name="password" type="password" autoComplete="current-password" required defaultValue={showDemo ? "Admin@123" : ""} /></label>
           {error && <div className="banner bad">{error}</div>}

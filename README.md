@@ -94,6 +94,8 @@ npm run dev
 
 ## Smartlogics history
 
+Comp. No values use three digits through 999 in a day (`OPL261101001`). From the 1000th complaint that day the number keeps growing (`OPL2611011000`). That longer number is still valid.
+
 Complaint imports keep a row only when Book Date is on or after **1 April 2026**. That is a fixed cutoff, not a full year and not a rolling twelve months. Set `IMPORT_CUTOFF` (or the date on the import screen) to move it. The file can be a Smartlogics CSV of about 70,000 rows; rows are written in batches of 100. The result reports how many were skipped because they are older, and how many had no book date. Book dates use `DD-Mon-YYYY`, for example `01-Apr-2026`. Closed and Happy Calling Done are stored as finished history. Do not commit a customer export to the repo. Uploaded files stay in `data/imports` locally, or in the Space when that is configured. Do not commit them.
 
 ## Serial numbers

@@ -54,7 +54,8 @@ export const MASTER_DEFS: MasterDef[] = [
     fields: [select("companyId", "Company", "companies", true), text("name", "Name", true), text("phone", "Mobile"), text("kind", "Type (ENGINEER or SERVICE_CENTER)", true), select("stateId", "State", "states"), select("districtId", "District", "districts"), text("pincodes", "Pincodes"), text("skills", "Skills")],
     present: (row) => ({ Company: row.company?.shortName ?? "", Name: row.name, Type: row.kind, District: row.district?.name ?? "", Pincodes: row.pincodes }),
   },
-  { key: "brands", title: "OEM / brand", group: "People", model: "brand", companyScoped: true, search: ["name"], orderBy: "name", include: { company: true }, fields: [select("companyId", "Company", "companies", true), text("name", "Brand", true)], present: (row) => ({ Company: row.company?.shortName ?? "", Brand: row.name }) },
+  { key: "brands", title: "Brand", group: "People", model: "brand", companyScoped: true, search: ["name"], orderBy: "name", include: { company: true }, fields: [select("companyId", "Company", "companies", true), text("name", "Brand", true)], present: (row) => ({ Company: row.company?.shortName ?? "", Brand: row.name }) },
+  { key: "schemes", title: "Scheme", group: "Complaint setup", model: "scheme", search: ["name"], orderBy: "name", fields: [text("name", "Scheme", true)], present: (row) => ({ Scheme: row.name }) },
   { key: "issues", title: "Complaint issue", group: "Complaint setup", model: "complaintIssue", search: ["name"], orderBy: "name", fields: [text("name", "Nature of complaint", true)], present: (row) => ({ Nature: row.name }) },
   { key: "sources", title: "Complaint source", group: "Complaint setup", model: "complaintSource", search: ["name", "code"], orderBy: "name", fields: [text("code", "Code", true), text("name", "Source", true)], present: (row) => ({ Code: row.code, Source: row.name }) },
   { key: "holds", title: "Complaint hold status", group: "Complaint setup", model: "holdStatus", search: ["name"], orderBy: "name", fields: [text("name", "Hold reason", true)], present: (row) => ({ "Hold reason": row.name }) },
@@ -86,14 +87,13 @@ function whereFor(def: MasterDef, q?: string, companyId?: string) {
   return where;
 }
 
-export async function listMaster(def: MasterDef, q?: string, page = 1, companyId?: string) {
-  const take = 25;
-  const skip = (Math.max(1, page) - 1) * take;
-  const where = whereFor(def, q, companyId);
-  const [total, rows] = await Promise.all([
-    model(def.model).count({ where }),
-    model(def.model).findMany({ where, include: def.include, orderBy: { [def.orderBy]: "asc" }, skip, take }),
-  ]);
+export async function listMaster(def: MasterDef, q?: string, page = 1, companyId?: string, cursor?: string | null) {
+  const take = 50;
+  const where = whereFor(def, q, companyId) as Record<string, unknown>;
+  if (cursor) where.id = { gt: cursor };
+  const rows = await model(def.model).findMany({ where, include: def.include, orderBy: { id: "asc" }, take });
+  const total = cursor ? 0 : await model(def.model).count({ where: whereFor(def, q, companyId) });
+  const last = rows[rows.length - 1];
   return {
     title: def.title,
     fields: def.fields,
@@ -102,6 +102,7 @@ export async function listMaster(def: MasterDef, q?: string, page = 1, companyId
     total,
     page: Math.max(1, page),
     pageSize: take,
+    nextCursor: rows.length === take && last ? String(last.id) : null,
   };
 }
 

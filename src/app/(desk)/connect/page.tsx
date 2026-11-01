@@ -23,7 +23,6 @@ export default function ConnectPage() {
         <div>
           <p className="kicker">Admin</p>
           <h1>Connect Power BI / Excel</h1>
-          <p>Read-only feeds for tickets, technicians, SLA, ratings, scores and attendance. Nothing is written back.</p>
         </div>
       </div>
       <section className="panel stack">
@@ -35,7 +34,7 @@ export default function ConnectPage() {
           const body = await response.json();
           if (response.ok) { setFresh(body.key); setKeys((current) => [body.row, ...current]); }
         }}>
-          <input name="name" placeholder="Key name, for example Finance" required />
+          <input name="name" placeholder="Key name" required />
           <button className="btn">Create key</button>
         </form>
         {fresh && <div className="banner">Copy this key now. It is not shown again. <span className="mono">{fresh}</span></div>}
@@ -47,12 +46,10 @@ export default function ConnectPage() {
         <h2>Excel</h2>
         <p>Data → From Web, then paste:</p>
         <p className="mono">{ticketUrl}</p>
-        <p className="muted">Add &amp;format=csv if you want a spreadsheet file. Use from and to as YYYY-MM-DD.</p>
         <h2>Power BI</h2>
         <p>Get data → OData feed or Web, then paste:</p>
         <p className="mono">{odataUrl}</p>
         <p>Other feeds: tickets, technicians, sla, ratings, scores, attendance. The same key works as the header x-report-key.</p>
-        <p className="muted">Starter model: one table per feed, a date filter on bookDate, and cards for open tickets, SLA breaches and average rating. Publish that report to a workspace shared with management.</p>
       </section>
     </div>
   );

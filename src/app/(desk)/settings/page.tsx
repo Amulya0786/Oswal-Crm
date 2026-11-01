@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ProofRules } from "@/components/proof-rules";
 import { WhatsAppTemplates } from "@/components/whatsapp-templates";
 
@@ -27,7 +26,7 @@ export default function SettingsPage() {
   if (!data) return <p>Loading settings…</p>;
   return (
     <div>
-      <div className="page-head"><div><p className="kicker">Admin</p><h1>Settings</h1><p>SLAs, message wording, and what a technician must capture at close. <Link href="/developers">API notes</Link></p></div></div>
+      <div className="page-head"><div><h1>Settings</h1></div></div>
       <div className="chips">
         {([["desk", "Desk"], ["whatsapp", "WhatsApp"], ["proof", "Proof"]] as const).map(([id, label]) => (
           <button key={id} type="button" className={`chip ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>{label}</button>

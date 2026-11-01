@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "./db";
 import { normalizePhone } from "@/lib/mask";
 import { allowSend, classifyInbound, renderWhatsApp, statusReply, type Lang, type WhatsAppEvent } from "@/lib/phase2";
@@ -117,6 +118,19 @@ export async function notifyWhatsAppEvent(event: WhatsAppEvent, input: {
   const rendered = renderWhatsApp(event, lang, input.vars);
   const body = saved ? saved.body.replace(/\{\{(\w+)\}\}/g, (_, key: string) => input.vars[key] ?? "") : rendered.body;
   return sendWhatsApp({ event, to: input.phone, body, template: rendered.template, companyId: input.companyId, complaintId: input.complaintId, lang });
+}
+
+export function whatsAppPostAllowed(raw: string, signature: string | null, shared: string | null) {
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (appSecret) {
+    const expected = `sha256=${createHmac("sha256", appSecret).update(raw).digest("hex")}`;
+    const left = Buffer.from(signature ?? "");
+    const right = Buffer.from(expected);
+    return left.length === right.length && timingSafeEqual(left, right);
+  }
+  const token = process.env.WHATSAPP_WEBHOOK_SECRET || process.env.WHATSAPP_VERIFY_TOKEN;
+  if (token) return shared === token;
+  return process.env.NODE_ENV !== "production";
 }
 
 export async function handleWhatsAppWebhook(payload: unknown) {

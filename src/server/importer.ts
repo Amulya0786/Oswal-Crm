@@ -107,6 +107,24 @@ async function companyByCode(code?: string | null, fallback?: string) {
   return prisma.company.findFirst({ where: { code: "PUMPS" } });
 }
 
+async function ensurePlace(stateByName: Map<string, any>, stateName?: string, districtName?: string) {
+  const stateLabel = (stateName ?? "").trim();
+  const districtLabel = (districtName ?? "").trim();
+  let state = stateLabel ? stateByName.get(stateLabel.toLowerCase()) : undefined;
+  if (stateLabel && !state) {
+    const created = await prisma.state.create({ data: { name: stateLabel } });
+    state = { ...created, districts: [] };
+    stateByName.set(stateLabel.toLowerCase(), state);
+  }
+  let district = state?.districts.find((item: { name: string }) => item.name.toLowerCase() === districtLabel.toLowerCase());
+  if (state && districtLabel && !district) {
+    const created = await prisma.district.create({ data: { name: districtLabel, stateId: state.id } });
+    district = { ...created, areas: [] };
+    state.districts.push(district);
+  }
+  return { state, district };
+}
+
 async function importComplaints(user: SessionUser, rows: Record<string, string>[], companyId: string | undefined, cutoff: Date) {
   const states = await prisma.state.findMany({ include: { districts: { include: { areas: true } } } });
   const stateByName = new Map(states.map((state) => [state.name.toLowerCase(), state]));
@@ -148,16 +166,42 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
       if (!company) throw new Error("Company is missing");
       const phone = normalizePhone(row.phone);
       if (!row.customerName || phone.length < 8) throw new Error("Customer and mobile are required");
-      const state = stateByName.get((row.stateName ?? "").trim().toLowerCase());
-      const district = state?.districts.find((item) => item.name.toLowerCase() === (row.districtName ?? "").trim().toLowerCase());
-      const area = district?.areas.find((item) => item.name.toLowerCase() === (row.areaName ?? "").trim().toLowerCase());
-      const brand = brands.find((item) => item.companyId === company.id && item.name.toLowerCase() === (row.brandName ?? "").trim().toLowerCase());
-      const product = products.find((item) => item.companyId === company.id && (item.name.toLowerCase() === (row.productDetails ?? "").trim().toLowerCase() || (row.productDetails ?? "").toLowerCase().includes(item.name.toLowerCase())));
+      const placed = await ensurePlace(stateByName, row.stateName, row.districtName);
+      const state = placed.state;
+      const district = placed.district;
+      const area = district?.areas.find((item: { name: string }) => item.name.toLowerCase() === (row.areaName ?? "").trim().toLowerCase());
+      let brand = brands.find((item) => item.companyId === company.id && item.name.toLowerCase() === (row.brandName ?? "").trim().toLowerCase());
+      const brandName = (row.brandName ?? "").trim();
+      if (brandName && !brand) {
+        brand = await prisma.brand.create({ data: { companyId: company.id, name: brandName } });
+        brands.push(brand);
+      }
+      let product = products.find((item) => item.companyId === company.id && (item.name.toLowerCase() === (row.productDetails ?? "").trim().toLowerCase() || (row.productDetails ?? "").toLowerCase().includes(item.name.toLowerCase())));
+      const productName = (row.productDetails ?? "").trim();
+      if (productName && !product) {
+        const sku = `IMP-${productName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`;
+        product = await prisma.product.upsert({
+          where: { companyId_sku: { companyId: company.id, sku } },
+          create: { companyId: company.id, name: productName, sku, type: "IMPORTED" },
+          update: {},
+        });
+        products.push(product);
+      }
       const assignedName = (row.assignedName || row.autoAssigned || "").trim();
       const employeeCode = (row.employeeCode || "").trim().toLowerCase();
       const engineer = engineers.find((item) => employeeCode && item.employeeCode?.toLowerCase() === employeeCode)
         ?? engineers.find((item) => item.companyId === company.id && item.name.toLowerCase() === assignedName.toLowerCase());
-      const nature = issues.find((item) => item.name.toLowerCase() === (row.natureText ?? "").trim().toLowerCase());
+      let nature = issues.find((item) => item.name.toLowerCase() === (row.natureText ?? "").trim().toLowerCase());
+      const natureName = (row.natureText ?? "").trim();
+      if (natureName && !nature) {
+        nature = await prisma.complaintIssue.create({ data: { name: natureName } });
+        issues.push(nature);
+      }
+      const categoryName = (row.categoryName ?? "").trim();
+      if (categoryName) {
+        const existingCategory = await prisma.category.findUnique({ where: { name: categoryName } });
+        if (!existingCategory) await prisma.category.create({ data: { name: categoryName, companyCode: company.code } });
+      }
       const history = closedHistory(row.status);
       const status = history.status;
       const callType = normalizeCallType(row.callType);

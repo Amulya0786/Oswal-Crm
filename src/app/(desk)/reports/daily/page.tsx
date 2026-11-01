@@ -51,7 +51,6 @@ export default async function DailySummaryPage() {
         <p>Technicians: none yet.</p>
         <h2>Assistant note</h2>
         <p>{note.text}</p>
-        <p className="muted">{note.mode === "mock" ? "This note is a local summary until an AI key is set. " : ""}Generate from Settings when you want the log, the PDF, and the manager message. Nothing is sent to a real inbox until SMTP or WhatsApp keys are set.</p>
       </section>
     </div>
   );

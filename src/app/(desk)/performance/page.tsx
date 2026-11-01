@@ -59,7 +59,6 @@ export default function PerformancePage() {
           <section className="panel" style={{ marginTop: 12 }}>
             <h2>Incentive slabs</h2>
             {slabs.map((slab) => <p key={slab.min}>Score {slab.min} and above: ₹{slab.amount}</p>)}
-            <p className="muted">Weights: closures 25, time against SLA 20, repeats 20, feedback 15, proof 10, reopens 10.</p>
           </section>
         </>
       )}

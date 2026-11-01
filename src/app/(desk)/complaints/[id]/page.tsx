@@ -86,7 +86,6 @@ export default async function ComplaintDetail({ params, searchParams }: { params
             {complaint.assetId && <Link className="btn line" href={`/assets/${complaint.assetId}`}>Asset history</Link>}
           </span>
         </div>
-        {!complaint.relatedTickets.length && <p className="muted">This is the first complaint we have for this customer and this product.</p>}
         <ul className="timeline">
           {complaint.relatedTickets.map((item) => (
             <li key={item.id}>

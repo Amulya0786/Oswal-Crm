@@ -20,16 +20,14 @@ export default async function BookPage() {
     prisma.pincode.findMany({ select: { code: true, districtId: true, areaId: true } }),
     prisma.product.findMany({ where: { active: true, ...companyFilter }, orderBy: { name: "asc" } }),
     prisma.engineer.findMany({ where: { active: true, ...companyFilter }, orderBy: { name: "asc" } }),
-    prisma.brand.findMany({ where: companyFilter, orderBy: { name: "asc" } }),
+    prisma.brand.findMany({ where: { ...companyFilter, ...(user.role === "OEM_PARTNER" ? { id: { in: user.brandIds.length ? user.brandIds : ["none"] } } : {}) }, orderBy: { name: "asc" } }),
     prisma.complaintIssue.findMany({ orderBy: { name: "asc" } }),
   ]);
   return (
     <div>
       <div className="page-head">
         <div>
-          <p className="kicker">New complaint</p>
           <h1>Book a call</h1>
-          <p>Comp. No is assigned when you save. Look up the mobile or serial first.</p>
         </div>
       </div>
       <BookForm options={{ companies, categories, states, districts, areas, pincodes, products, engineers, brands, issues }} scope={scope} />

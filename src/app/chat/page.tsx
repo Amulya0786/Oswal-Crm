@@ -13,7 +13,6 @@ export default function ChatPreviewPage() {
       <BrandLogo />
       <p className="kicker">WhatsApp preview</p>
       <h1 style={{ fontFamily: "var(--display)" }}>Chat menu</h1>
-      <p className="muted">This is a local preview. Nothing is sent. A real chat uses the WhatsApp webhook.</p>
       <section className="panel stack">
         {lines.map((line, index) => <p key={index} style={{ whiteSpace: "pre-wrap" }}>{line}</p>)}
         <form className="filters" onSubmit={(event) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ListRow } from "@/server/query";
 import { labelOf, CALL_TYPES, STATUSES, statusClass } from "@/lib/labels";
 import { formatDay } from "@/lib/time";
@@ -56,6 +56,13 @@ export function ComplaintTable({
     setMessage(response.ok ? `Updated ${payload.updated}` : payload.error);
     setPicked([]);
     router.refresh();
+  }
+
+  async function exportSelected() {
+    const params = new URLSearchParams(window.location.search);
+    const filters = Object.fromEntries(params.entries());
+    const response = await fetch("/api/desk/exports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filters }) });
+    if (response.ok) window.location.href = "/exports";
   }
 
   return (
@@ -122,10 +129,49 @@ export function ComplaintTable({
     </div>
   );
 
-  async function exportSelected() {
-    const params = new URLSearchParams(window.location.search);
-    const filters = Object.fromEntries(params.entries());
-    const response = await fetch("/api/desk/exports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filters }) });
-    if (response.ok) window.location.href = "/exports";
-  }
+}
+
+export function ComplaintFeed({
+  initial,
+  nextCursor,
+  search,
+  engineers,
+  problems,
+  solutions,
+  can,
+}: {
+  initial: ListRow[];
+  nextCursor: string | null;
+  search: string;
+  engineers: Engineer[];
+  problems: Named[];
+  solutions: Named[];
+  can: { assign: boolean; hold: boolean; close: boolean; happy: boolean; cancel: boolean };
+}) {
+  const [rows, setRows] = useState(initial);
+  const [cursor, setCursor] = useState(nextCursor);
+  const lock = useRef(false);
+  useEffect(() => {
+    const node = document.getElementById("complaint-more");
+    if (!node) return;
+    const observer = new IntersectionObserver(async ([entry]) => {
+      if (!entry?.isIntersecting || !cursor || lock.current) return;
+      lock.current = true;
+      const response = await fetch(`/api/desk/complaints?${search}&cursor=${encodeURIComponent(cursor)}`);
+      if (response.ok) {
+        const body = await response.json();
+        setRows((current) => [...current, ...(body.rows ?? [])]);
+        setCursor(body.nextCursor ?? null);
+      }
+      lock.current = false;
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [cursor, search]);
+  return (
+    <>
+      <ComplaintTable rows={rows} engineers={engineers} problems={problems} solutions={solutions} can={can} />
+      <div id="complaint-more" />
+    </>
+  );
 }

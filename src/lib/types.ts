@@ -5,6 +5,7 @@ export const ROLES = [
   "STATE_HEAD",
   "TECHNICIAN",
   "DEALER",
+  "OEM_PARTNER",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -89,6 +90,7 @@ export type ComplaintFilters = {
   includeTest?: string;
   page?: number;
   pageSize?: number;
+  cursor?: string;
   sort?: string;
   dir?: string;
 };

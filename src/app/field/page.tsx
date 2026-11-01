@@ -31,7 +31,7 @@ export default function FieldPage() {
       const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Could not save");
-      setMessage(payload.devCode ? `OTP ${payload.devCode} logged. No WhatsApp key is set.` : "Saved");
+      setMessage(payload.devCode && process.env.NEXT_PUBLIC_SHOW_DEV_OTP === "1" ? `OTP ${payload.devCode}` : "Saved");
       await refresh();
     } catch (error) {
       const queue = JSON.parse(window.localStorage.getItem("oswal-queue") || "[]");
@@ -52,7 +52,7 @@ export default function FieldPage() {
   return (
     <main className="field-app">
       <header className="field-bar">
-        <BrandLogo collapsed />
+        <BrandLogo />
         <strong>Oswal</strong>
         <button className="btn line" onClick={() => {
           const next = lang === "en" ? "hi" : "en";
@@ -86,7 +86,7 @@ export default function FieldPage() {
       </section>
       <section className="panel stack">
         <h2>{lang === "hi" ? "बंद करने के प्रमाण" : "Closing proof"}</h2>
-        <p className="muted">{lang === "hi" ? "फोटो, हस्ताक्षर या OTP, और GPS ज़रूरी हैं। दूर का पिन चिह्नित होता है।" : "A close needs a site photo, a signature or the customer OTP, and GPS. A pin far from the customer is flagged."}</p>
+        <p>{lang === "hi" ? "फोटो, हस्ताक्षर या OTP, और GPS" : "Photo, signature or OTP, and GPS"}</p>
         <canvas aria-label="Signature" width={320} height={90} style={{ width: "100%", background: "#fff", borderRadius: 12, border: "1px solid #d5e4db" }} />
       </section>
       <section className="panel">

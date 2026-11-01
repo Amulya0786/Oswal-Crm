@@ -128,6 +128,7 @@ model State {
   id         String         @id @default(cuid())
   name       String         @unique
   code       String?
+  zone       String?
   districts  District[]
   users      UserState[]
   complaints Complaint[]
@@ -553,9 +554,12 @@ model Complaint {
   asset           Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([companyId, status, bookDate])
+  @@index([companyId, stateId, status])
+  @@index([stateId, status])
+  @@index([engineerId, bookDate])
+  @@index([brandId, bookDate])
   @@index([status, bookDate])
   @@index([districtId, status])
-  @@index([stateId, status])
   @@index([engineerId, status])
   @@index([bookDate])
   @@index([slaDueAt])
@@ -943,4 +947,9 @@ model ReportKey {
   prefix    String
   createdAt DateTime  @default(now())
   revokedAt DateTime?
+}
+
+model Scheme {
+  id   String @id @default(cuid())
+  name String @unique
 }

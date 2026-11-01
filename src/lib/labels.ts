@@ -41,6 +41,7 @@ export const ROLE_LABEL: Record<string, string> = {
   STATE_HEAD: "State head",
   TECHNICIAN: "Technician",
   DEALER: "Dealer",
+  OEM_PARTNER: "OEM Partner",
 };
 
 export function labelOf(list: readonly { id: string; label: string }[], id: string | null | undefined) {

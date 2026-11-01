@@ -8,6 +8,7 @@ import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { DESK_LABEL, type FieldLang } from "@/lib/i18n";
 import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
+import { showToast } from "@/components/toast";
 
 const GROUPS = [
   { label: "Desk", items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
@@ -43,6 +44,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [lang, setLang] = useState<"en" | "hi">("en");
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<{ complaints: { id: string; ticketNo: string; customerName: string; status: string }[]; customers: { id: string; name: string; phone: string }[]; engineers: { id: string; name: string }[] }>({ complaints: [], customers: [], engineers: [] });
@@ -53,8 +55,10 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
     ...group,
     items: group.items.filter((item) => {
       if (item.href === "/security" || item.href === "/import" || item.href === "/settings" || item.href === "/connect") return user.caps.security;
-      if (item.href === "/reports" || item.href === "/performance" || item.href === "/reports/daily") return user.caps.report || user.caps.analytics;
+      if (item.href === "/reports") return user.caps.report;
+      if (item.href === "/performance" || item.href === "/reports/daily" || item.href === "/assist") return user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
+      if (item.href === "/map" || item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;
     }),
   })).filter((group) => group.items.length);
@@ -84,6 +88,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
     const handle = setTimeout(async () => {
       const response = await fetch(`/api/desk/search?q=${encodeURIComponent(q)}`);
       if (response.ok) setHits(await response.json());
+      else showToast("Search failed");
     }, 160);
     return () => clearTimeout(handle);
   }, [q, open]);
@@ -114,10 +119,11 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   }
 
   return (
-    <div className={`app ${collapsed ? "collapsed" : ""}`}>
+    <div className={`app ${collapsed ? "collapsed" : ""} ${navOpen ? "nav-open" : ""}`}>
       <header className="topband">
         <div className="topband-row">
-          <button type="button" className="icon-btn" aria-label="Collapse sidebar" onClick={() => {
+          <button type="button" className="icon-btn" aria-label="Menu" onClick={() => {
+            if (window.matchMedia("(max-width: 900px)").matches) { setNavOpen((value) => !value); return; }
             const next = !collapsed;
             setCollapsed(next);
             window.localStorage.setItem("oswal-sidebar", next ? "collapsed" : "open");
@@ -139,6 +145,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             document.documentElement.lang = next;
           }}>{lang === "hi" ? "EN" : "हिंदी"}</button>
           <ThemeToggle />
+          <button type="button" className="btn line" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
           <span className="live-dot" title="Live" />
           <details className="user-menu">
             <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#d5e7dc" }}>{ROLE_LABEL[user.role]}</div></summary>
@@ -187,7 +194,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       {open && (
         <div className="palette" onClick={() => setOpen(false)}>
           <form onClick={(event) => event.stopPropagation()}>
-            <input autoFocus placeholder="Comp. No, mobile, serial, customer, technician" value={q} onChange={(event) => setQ(event.target.value)} />
+            <input autoFocus placeholder="Search" value={q} onChange={(event) => setQ(event.target.value)} />
             <div>
               {hits.complaints.map((row) => <Link className="hit" key={row.id} href={`/complaints/${row.ticketNo}`} onClick={() => setOpen(false)}><b className="mono">{row.ticketNo}</b> · {row.customerName} · {row.status}</Link>)}
               {hits.customers.map((row) => <Link className="hit" key={row.id} href={`/customers/${row.id}`} onClick={() => setOpen(false)}>{row.name} · {row.phone}</Link>)}

@@ -31,9 +31,7 @@ export default function PasswordPage() {
           window.location.href = "/";
         }}>
           <BrandLogo />
-          <p className="kicker">First sign-in</p>
           <h2>Choose your password</h2>
-          <p className="muted">The password from the deploy form works once. After this, only the new one signs you in.</p>
           <label className="stack">Current password<input name="current" type="password" autoComplete="current-password" required /></label>
           <label className="stack">New password<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label>
           {error && <div className="banner bad">{error}</div>}

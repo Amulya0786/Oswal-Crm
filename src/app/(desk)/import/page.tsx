@@ -11,7 +11,7 @@ export default function ImportPage() {
 
   return (
     <div>
-      <div className="page-head"><div><p className="kicker">Smartlogics import</p><h1>Bring the old register across</h1><p>Complaints are kept only when the book date is on or after the cutoff. The default is 1 April 2026, not a full year of history. Older rows are skipped and counted. Original Comp. No values are kept.</p></div></div>
+      <div className="page-head"><div><h1>Import</h1></div></div>
       <form className="filters" onSubmit={async (event) => {
         event.preventDefault();
         const body = new FormData(event.currentTarget);

@@ -169,32 +169,44 @@ const LIST_COLUMNS = Prisma.raw(`
 export async function listComplaints(user: SessionUser, scope: string, filters: ComplaintFilters, now = new Date()) {
   const ctx = await loadRiskContext(now);
   const where = Prisma.sql`${scopeSql(user, scope)} AND ${filterSql(filters, ctx)}`;
-  const sort = SORTS.has(filters.sort ?? "") ? filters.sort! : "bookDate";
-  const dir = filters.dir === "asc" ? "ASC" : "DESC";
-  const order = Prisma.raw(`"${sort}" ${dir}, "id" ${dir}`);
-  const pageSize = Math.min(50, Math.max(1, filters.pageSize ?? 25));
-  const requested = filters.page ?? 1;
-  const page = Math.min(200, Math.max(1, requested));
-  const skip = (page - 1) * pageSize;
+  const pageSize = 50;
+  const cursor = parseCursor(filters.cursor);
+  const cursorSql = cursor
+    ? Prisma.sql`AND ("bookDate" < ${cursor.at} OR ("bookDate" = ${cursor.at} AND "id" < ${cursor.id}))`
+    : Prisma.empty;
   const [countRows, rows, companies] = await Promise.all([
-    prisma.$queryRaw<{ n: number }[]>`SELECT COUNT(*)::int AS n FROM "Complaint" WHERE ${where}`,
+    cursor
+      ? Promise.resolve([{ n: 0 }])
+      : prisma.$queryRaw<{ n: number }[]>`SELECT COUNT(*)::int AS n FROM "Complaint" WHERE ${where}`,
     prisma.$queryRaw<RawRow[]>`
       SELECT ${LIST_COLUMNS}
       FROM "Complaint"
-      WHERE ${where}
-      ORDER BY ${order}
-      LIMIT ${pageSize} OFFSET ${skip}
+      WHERE ${where} ${cursorSql}
+      ORDER BY "bookDate" DESC, "id" DESC
+      LIMIT ${pageSize}
     `,
     prisma.company.findMany({ select: { id: true, shortName: true } }),
   ]);
   const names = new Map(companies.map((company) => [company.id, company.shortName]));
+  const last = rows[rows.length - 1];
   return {
     rows: rows.map((row) => present(row, user, ctx, names)),
     total: Number(countRows[0]?.n ?? 0),
-    page,
+    page: 1,
     pageSize,
-    capped: requested > 200,
+    capped: false,
+    nextCursor: rows.length === pageSize && last ? `${new Date(last.bookDate).toISOString()}|${last.id}` : null,
   };
+}
+
+function parseCursor(value?: string) {
+  if (!value) return null;
+  const split = value.indexOf("|");
+  if (split < 0) return null;
+  const at = new Date(value.slice(0, split));
+  const id = value.slice(split + 1);
+  if (!id || Number.isNaN(at.getTime())) return null;
+  return { at, id };
 }
 
 export type Tile = {

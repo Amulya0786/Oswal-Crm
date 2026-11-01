@@ -37,7 +37,7 @@ export default function TrackPage() {
           if (!response.ok) setError(body.error);
           else { setResult(body); setStep("done"); }
         }}>
-          {devCode && <div className="banner">Demo OTP: {devCode}. SMS is not configured.</div>}
+          {devCode && process.env.NEXT_PUBLIC_SHOW_DEV_OTP === "1" && <div className="banner">Demo OTP: {devCode}</div>}
           <input placeholder="OTP" value={code} onChange={(event) => setCode(event.target.value)} required />
           <button className="btn">Show status</button>
         </form>

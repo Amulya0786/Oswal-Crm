@@ -1,6 +1,6 @@
 import { yyMMdd } from "./time";
 
-/** Shared sequence for both companies. 12 characters until a day passes 999. */
+/** OPL + YYMMDD + sequence. Three digits through 999. From 1000 the same day uses 4 or more digits (OPL2611011000). That longer number is valid. */
 export function formatTicketNo(date: Date, seq: number) {
   const key = yyMMdd(date);
   const width = seq > 999 ? String(seq).length : 3;

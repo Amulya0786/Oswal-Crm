@@ -6,7 +6,8 @@ import { fail, json, readJson } from "@/server/http";
 import { toSessionUser } from "@/server/auth";
 
 async function serviceUser() {
-  const key = process.env.OSWAL_API_KEY || "oswal-demo-key";
+  const key = process.env.OSWAL_API_KEY || (process.env.NODE_ENV === "production" ? "" : "oswal-demo-key");
+  if (!key) return null;
   const user = await prisma.user.findFirst({
     where: { role: "ADMIN", active: true },
     include: { memberships: { include: { company: true } }, states: true, districts: true, brands: true },

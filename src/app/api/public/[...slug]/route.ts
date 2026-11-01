@@ -4,7 +4,8 @@ import { fail, json, readJson } from "@/server/http";
 import { normalizePhone } from "@/lib/mask";
 import { labelOf, STATUSES, CALL_TYPES } from "@/lib/labels";
 import { allowPublicAttempt, checkCaptcha, issueCaptcha } from "@/lib/phase2";
-import { handleWhatsAppWebhook } from "@/server/whatsapp";
+import { handleWhatsAppWebhook, whatsAppPostAllowed } from "@/server/whatsapp";
+import { companyCodeForCategory } from "@/lib/company-tag";
 import { saveMedia } from "@/server/field";
 
 const attempts = new Map<string, number[]>();
@@ -38,21 +39,39 @@ export async function GET(req: Request, context: { params: Promise<{ slug: strin
   return json({ error: "Not found" }, 404);
 }
 
+function devOtp(code: string) {
+  return process.env.SHOW_DEV_OTP === "1" ? code : undefined;
+}
+
+async function tooManyOtps(phone: string, purpose: string) {
+  const since = new Date(Date.now() - 60 * 60 * 1000);
+  const count = await prisma.otpChallenge.count({ where: { phone, purpose, createdAt: { gte: since } } });
+  return count >= 5;
+}
+
 export async function POST(req: Request, context: { params: Promise<{ slug: string[] }> }) {
   try {
     const { slug } = await context.params;
+    if (slug[0] === "whatsapp") {
+      const raw = await req.text();
+      if (!whatsAppPostAllowed(raw, req.headers.get("x-hub-signature-256"), req.headers.get("x-webhook-secret"))) return json({ error: "Bad signature" }, 401);
+      let payload: unknown = {};
+      try { payload = raw ? JSON.parse(raw) : {}; } catch { return json({ error: "Bad JSON" }, 400); }
+      return json(await handleWhatsAppWebhook(payload));
+    }
     const body = await readJson(req);
     if (slug[0] === "otp") {
       const phone = normalizePhone(body.phone);
       const ticketNo = String(body.ticketNo ?? "").toUpperCase();
       const complaint = await prisma.complaint.findUnique({ where: { ticketNo } });
       if (!complaint || complaint.phone !== phone) return json({ error: "Complaint and mobile do not match" }, 404);
+      if (await tooManyOtps(phone, "TRACK")) return json({ error: "Too many codes. Try again in an hour." }, 429);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       await prisma.otpChallenge.create({
         data: { phone, ticketNo, code, purpose: "TRACK", expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
       });
       console.log(`[otp] ${phone} ${ticketNo} -> ${code}`);
-      return json({ ok: true, devCode: process.env.MSG91_AUTH_KEY ? undefined : code });
+      return json({ ok: true, devCode: devOtp(code) });
     }
     if (slug[0] === "track") {
       const phone = normalizePhone(body.phone);
@@ -61,7 +80,7 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
         where: { phone, ticketNo, purpose: "TRACK", used: false, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: "desc" },
       });
-      if (!challenge || (challenge.code !== String(body.code) && String(body.code) !== "000000")) return json({ error: "OTP is wrong or expired" }, 401);
+      if (!challenge || challenge.code !== String(body.code)) return json({ error: "OTP is wrong or expired" }, 401);
       await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { used: true } });
       const complaint = await prisma.complaint.findUnique({ where: { ticketNo }, include: { company: true, events: { orderBy: { at: "asc" }, take: 30 } } });
       if (!complaint) return json({ error: "Not found" }, 404);
@@ -103,11 +122,11 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     if (slug[0] === "otp-book") {
       const phone = normalizePhone(body.phone);
       if (phone.length !== 10) return json({ error: "Enter a 10-digit mobile" }, 400);
-      if (!gate(`otp:${phone}`)) return json({ error: "Too many codes. Try again in an hour." }, 429);
+      if (await tooManyOtps(phone, "BOOK")) return json({ error: "Too many codes. Try again in an hour." }, 429);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       await prisma.otpChallenge.create({ data: { phone, code, purpose: "BOOK", expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
       console.log(`[otp-book] ${phone} -> ${code}`);
-      return json({ ok: true, devCode: process.env.MSG91_AUTH_KEY ? undefined : code });
+      return json({ ok: true, devCode: devOtp(code) });
     }
     if (slug[0] === "book") {
       const phone = normalizePhone(body.phone);
@@ -123,6 +142,14 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
       if (!districtId && body.districtName) {
         const district = await prisma.district.findFirst({ where: { name: { equals: String(body.districtName), mode: "insensitive" } } });
         districtId = district?.id ?? null;
+      }
+      const code = companyCodeForCategory(String(body.product || body.productDetails || ""));
+      const tagged = await prisma.company.findUnique({ where: { code } });
+      if (!tagged) return json({ error: "Choose a product" }, 400);
+      body.companyId = tagged.id;
+      if (body.sameIssueAgain) {
+        body.acknowledgeDuplicate = true;
+        body.duplicateOverrideReason = "Same issue again";
       }
       const hasSerial = String(body.serialNo ?? "").trim().length > 0;
       const photos = Array.isArray(body.photos) ? body.photos.slice(0, 3) : [];

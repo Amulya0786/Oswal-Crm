@@ -1,7 +1,7 @@
 import { companyCodeForCategory, type CompanyCode } from "./company-tag";
 
 export type ChatLang = "en" | "hi";
-export type ChatStep = "menu" | "name" | "product" | "problem" | "place" | "serial" | "confirm";
+export type ChatStep = "menu" | "name" | "product" | "problem" | "place" | "serial" | "confirm" | "status";
 
 export type ChatDraft = {
   name?: string;
@@ -16,7 +16,7 @@ export type ChatSession = { lang: ChatLang; step: ChatStep; draft: ChatDraft };
 
 export type ChatAction =
   | { type: "book"; draft: ChatDraft; company: CompanyCode; duplicate: boolean }
-  | { type: "status" }
+  | { type: "status"; ticket?: string }
   | { type: "agent"; note: string };
 
 export type ChatTurn = { session: ChatSession; messages: string[]; action?: ChatAction };
@@ -34,13 +34,16 @@ export function chatTurn(session: ChatSession, text: string, priorOpen = false):
   const raw = text.trim();
   const lower = raw.toLowerCase();
   if (lower === "menu" || lower === "0" || raw === "मेनू") return { session: { ...session, step: "menu", draft: {} }, messages: [MENU[session.lang]] };
-  if (raw === "9") {
+  if (session.step === "menu" && (raw === "9" || raw === "९")) {
     const lang: ChatLang = session.lang === "en" ? "hi" : "en";
     return { session: { ...session, lang, step: "menu", draft: {} }, messages: [MENU[lang]] };
   }
+  if (session.step === "status") {
+    return { session: { ...session, step: "menu" }, messages: [session.lang === "hi" ? "स्थिति देख रहे हैं।" : "Checking that complaint."], action: { type: "status", ticket: raw } };
+  }
   if (session.step === "menu") {
     if (raw === "1") return { session: { ...session, step: "name", draft: {} }, messages: [session.lang === "hi" ? "आपका नाम?" : "Your name?"] };
-    if (raw === "2") return { session, messages: [session.lang === "hi" ? "स्थिति भेजी जा रही है।" : "Sending your latest complaint status."], action: { type: "status" } };
+    if (raw === "2") return { session: { ...session, step: "status" }, messages: [session.lang === "hi" ? "शिकायत संख्या लिखें।" : "Type the Comp. No."] };
     if (raw === "3") return { session: { ...session, step: "menu", draft: {} }, messages: [session.lang === "hi" ? "हमारे साथी आपको कॉल करेंगे।" : "A colleague will call you back."], action: { type: "agent", note: raw } };
     return { session, messages: [MENU[session.lang]] };
   }

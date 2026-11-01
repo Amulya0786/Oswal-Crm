@@ -117,7 +117,7 @@ export const COMPLAINT_FIELDS = [
   ["assignedName", "Assigned to"],
   ["status", "Status"],
   ["saralId", "Saral Id"],
-  ["brandName", "OEM / brand"],
+  ["brandName", "Brand"],
   ["finalStatus", "Final status"],
   ["callBy", "Call by"],
   ["priority", "Priority"],

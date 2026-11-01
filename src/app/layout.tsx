@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { DM_Mono, Inter, Sora } from "next/font/google";
+import { DM_Mono, Inter, Noto_Sans_Devanagari } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const sora = Sora({ subsets: ["latin"], variable: "--font-sora" });
+const noto = Noto_Sans_Devanagari({ subsets: ["devanagari"], weight: ["400", "500", "600"], variable: "--font-noto" });
 const mono = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
@@ -16,8 +16,8 @@ const themeScript = `try{var t=localStorage.getItem("oswal-theme");document.docu
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="brand" suppressHydrationWarning>
-      <body className={`${inter.variable} ${sora.variable} ${mono.variable}`}>
+    <html lang="en" data-theme="brand" className={`${inter.variable} ${noto.variable} ${mono.variable}`} suppressHydrationWarning>
+      <body>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {children}
       </body>

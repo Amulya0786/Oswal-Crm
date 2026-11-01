@@ -4,12 +4,10 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/track",
   "/book",
-  "/developers",
   "/api/auth/login",
   "/api/public",
   "/api/v1",
   "/api/health",
-  "/api/openapi",
   "/api/cron",
   "/api/report",
   "/chat",
@@ -27,7 +25,8 @@ export function middleware(request: NextRequest) {
     pathname === "/apple-icon" ||
     pathname === "/icon.svg" ||
     pathname === "/favicon.ico" ||
-    pathname === "/icon.png"
+    pathname === "/icon.png" ||
+    pathname === "/robots.txt"
   ) return NextResponse.next();
   if (!request.cookies.get("oswal_session")) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Sign in" }, { status: 401 });
@@ -36,7 +35,9 @@ export function middleware(request: NextRequest) {
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = { matcher: ["/((?!_next/static|_next/image|icon.svg|favicon.ico).*)"] };

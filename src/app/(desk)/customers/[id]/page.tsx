@@ -21,11 +21,15 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       state: true,
       area: true,
       assets: { orderBy: { productName: "asc" }, include: { complaints: { select: { id: true } } } },
-      complaints: { orderBy: { bookDate: "desc" }, take: 100, include: { spares: true } },
+      complaints: { orderBy: { bookDate: "desc" }, take: 50, include: { spares: true } },
     },
   });
   if (!customer || customer.mergedIntoId) notFound();
   if (scope !== "all" && customer.companyId !== scope && !customer.complaints.some((row) => row.companyId === scope)) notFound();
+  if (user.role === "OEM_PARTNER") {
+    customer.complaints = customer.complaints.filter((row) => row.brandId && user.brandIds.includes(row.brandId));
+    if (!customer.complaints.length) notFound();
+  }
   return (
     <div>
       <div className="page-head">

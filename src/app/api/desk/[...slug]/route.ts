@@ -312,12 +312,42 @@ async function route(method: string, slug: string[], req: Request) {
     return json({ ok: true });
   }
 
+  if (head === "complaints" && method === "GET" && !id) {
+    return json(await listComplaints(user, scope, { ...filtersFromRecord(Object.fromEntries(url.searchParams.entries())), cursor: url.searchParams.get("cursor") ?? undefined }));
+  }
+  if (head === "customers" && method === "GET" && !id) {
+    const cursor = url.searchParams.get("cursor");
+    const rows = await prisma.customer.findMany({
+      where: {
+        mergedIntoId: null,
+        ...(cursor ? { id: { gt: cursor } } : {}),
+        ...(scope === "all" || user.role === "ADMIN" ? {} : { companyId: scope === "all" ? undefined : scope }),
+      },
+      orderBy: { id: "asc" },
+      take: 50,
+      select: { id: true, name: true, phone: true },
+    });
+    return json({ rows, nextCursor: rows.length === 50 ? rows[rows.length - 1].id : null });
+  }
   if (head === "complaints" && method === "POST" && !id) return json(await createComplaint(user, await readJson(req)));
   if (head === "complaints" && method === "POST" && id === "bulk") return json(await bulkUpdate(user, scope, await readJson(req)));
   if (head === "complaints" && id && method === "PATCH") return json(await updateComplaint(user, scope, id, await readJson(req)));
   if (head === "complaints" && id && method === "GET") {
     const row = await getComplaint(user, scope, id);
     return row ? json(row) : json({ error: "Not found" }, 404);
+  }
+
+  if (method === "POST" && head === "reference") {
+    if (!user.caps.masterWrite) return json({ error: "Admins only" }, 403);
+    const { loadReference } = await import("@/server/load-reference.mjs");
+    return json(await loadReference(prisma));
+  }
+  if (method === "POST" && head === "pincodes-csv") {
+    if (!user.caps.masterWrite) return json({ error: "Admins only" }, 403);
+    const body = await readJson(req);
+    const { parsePincodeCsv } = await import("@/data/reference.mjs");
+    const { importPincodes } = await import("@/server/load-reference.mjs");
+    return json(await importPincodes(prisma, parsePincodeCsv(String(body.csv ?? ""))));
   }
 
   if (head === "masters" && id) {
@@ -327,7 +357,7 @@ async function route(method: string, slug: string[], req: Request) {
     if (method === "GET") {
       const page = Number(url.searchParams.get("page") ?? 1);
       const [list, options] = await Promise.all([
-        listMaster(def, url.searchParams.get("q") ?? undefined, page, scope),
+        listMaster(def, url.searchParams.get("q") ?? undefined, page, scope, url.searchParams.get("cursor")),
         masterOptions(),
       ]);
       return json({ ...list, options, canWrite: user.caps.masterWrite });

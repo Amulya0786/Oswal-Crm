@@ -3,6 +3,7 @@ import path from "path";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { COMPANIES, PROOF_DEFAULT, SLA_HOURS, adminBootstrapError } from "./bootstrap-rules.mjs";
+import { loadReference } from "../src/server/load-reference.mjs";
 
 const prisma = new PrismaClient();
 
@@ -92,5 +93,6 @@ async function ensureAdmin() {
 assertProductionSecrets();
 ensureStorage();
 await ensureConfig();
+await loadReference(prisma);
 await ensureAdmin();
 await prisma.$disconnect();

@@ -28,7 +28,10 @@ export async function runChat(phoneRaw: string, text: string) {
   });
   const messages = [...turn.messages];
   if (turn.action?.type === "status") {
-    const row = await prisma.complaint.findFirst({ where: { phone }, orderBy: { bookDate: "desc" } });
+    const ticket = (turn.action.ticket ?? "").trim().toUpperCase();
+    const row = ticket.startsWith("OPL")
+      ? await prisma.complaint.findUnique({ where: { ticketNo: ticket } })
+      : await prisma.complaint.findFirst({ where: { phone }, orderBy: { bookDate: "desc" } });
     messages.push(row
       ? `${row.ticketNo}: ${labelOf(STATUSES, row.status)}. ${row.assignedName ? row.assignedName.split(" ")[0] : "No technician yet"}.`
       : (turn.session.lang === "hi" ? "कोई शिकायत नहीं मिली।" : "No complaint found for this mobile."));

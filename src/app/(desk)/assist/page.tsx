@@ -6,7 +6,7 @@ const TABS = ["Booking", "Fix steps", "Ask"] as const;
 
 export default function AssistPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Booking");
-  const [text, setText] = useState("pending solar controller complaints in Buldhana older than 7 days");
+  const [text, setText] = useState("");
   const [result, setResult] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -36,10 +36,9 @@ export default function AssistPage() {
         {TABS.map((item) => <button key={item} className={`chip ${tab === item ? "on" : ""}`} onClick={() => { setTab(item); setResult(""); }}>{item}</button>)}
       </div>
       <section className="panel stack">
-        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={tab === "Booking" ? "Customer description, Hindi or English" : tab === "Fix steps" ? "Actual problem" : "Ask in plain language"} />
+        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={tab} />
         <button className="btn" disabled={pending} onClick={() => void run()}>{pending ? "Working…" : "Ask"}</button>
         {result && <pre className="muted">{result}</pre>}
-        {!result && <p className="muted">Nothing asked yet. Booking can suggest a category and a repeat. Fix steps use closed complaints. Ask can look for a district and an age.</p>}
       </section>
     </div>
   );

@@ -58,6 +58,16 @@ const bookSchema = z.object({
 
 export type BookInput = z.infer<typeof bookSchema>;
 
+function parseDeskDate(value: string | null) {
+  if (!value) return null;
+  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (dmy) return new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 4, 30));
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 4, 30));
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function clean(value?: string | null) {
   const text = value?.trim();
   return text ? text : null;
@@ -177,7 +187,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
 
   const hours = await slaHours(company.id, input.callType);
   const bookDate = new Date();
-  const scheduleDate = clean(input.scheduleDate) ? new Date(input.scheduleDate!) : null;
+  const scheduleDate = parseDeskDate(clean(input.scheduleDate));
   const source = opts?.publicForm ? (input.source === "QR" ? "QR" : input.source === "WHATSAPP" ? "WHATSAPP" : "WEB") : user?.role === "DEALER" ? "DEALER" : input.source || "CALL";
   const status = engineer ? "ASSIGNED" : "OPEN";
   const actorName = user?.name ?? (source === "QR" ? "QR link" : "Web form");

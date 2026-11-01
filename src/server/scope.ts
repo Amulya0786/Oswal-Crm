@@ -34,13 +34,16 @@ export function scopeSql(user: SessionUser, scope: string, alias?: string) {
     parts.push(user.engineerId ? Prisma.sql`${col(alias, "engineerId")} = ${user.engineerId}` : Prisma.sql`FALSE`);
   }
   if (user.role === "DEALER") parts.push(Prisma.sql`${col(alias, "createdById")} = ${user.id}`);
+  if (user.role === "OEM_PARTNER") {
+    parts.push(user.brandIds.length ? Prisma.sql`${col(alias, "brandId")} IN (${Prisma.join(user.brandIds)})` : Prisma.sql`FALSE`);
+  }
   if (user.role === "AREA_MANAGER") {
     parts.push(user.districtIds.length ? Prisma.sql`${col(alias, "districtId")} IN (${Prisma.join(user.districtIds)})` : Prisma.sql`FALSE`);
   }
   if (user.role === "STATE_HEAD") {
     parts.push(user.stateIds.length ? Prisma.sql`${col(alias, "stateId")} IN (${Prisma.join(user.stateIds)})` : Prisma.sql`FALSE`);
   }
-  if (user.brandIds.length && user.role !== "ADMIN" && user.role !== "CALL_CENTRE") {
+  if (user.brandIds.length && user.role !== "ADMIN" && user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER") {
     parts.push(Prisma.sql`${col(alias, "brandId")} IN (${Prisma.join(user.brandIds)})`);
   }
   parts.push(Prisma.sql`${col(alias, "excludeFromMis")} = false`);
@@ -63,9 +66,10 @@ export function canSee(
   if (user.role !== "ADMIN" && !user.companyIds.includes(row.companyId)) return false;
   if (user.role === "TECHNICIAN" && row.engineerId !== user.engineerId) return false;
   if (user.role === "DEALER" && row.createdById !== user.id) return false;
+  if (user.role === "OEM_PARTNER" && (!row.brandId || !user.brandIds.includes(row.brandId))) return false;
   if (user.role === "AREA_MANAGER" && (!row.districtId || !user.districtIds.includes(row.districtId))) return false;
   if (user.role === "STATE_HEAD" && (!row.stateId || !user.stateIds.includes(row.stateId))) return false;
-  if (user.brandIds.length && user.role !== "ADMIN" && user.role !== "CALL_CENTRE") {
+  if (user.brandIds.length && user.role !== "ADMIN" && user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER") {
     if (!row.brandId || !user.brandIds.includes(row.brandId)) return false;
   }
   return true;
@@ -76,9 +80,11 @@ function like(value: string) {
 }
 
 function dayStart(value: string | undefined) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
-  if (!match) return null;
-  return istMidnight(Number(match[1]), Number(match[2]), Number(match[3]));
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  if (iso) return istMidnight(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value ?? "");
+  if (dmy) return istMidnight(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
+  return null;
 }
 
 export function riskPredicate(ctx: RiskContext, alias?: string) {

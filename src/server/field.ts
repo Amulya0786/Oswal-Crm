@@ -73,7 +73,7 @@ export async function issueCloseOtp(user: SessionUser, complaintId: string) {
     complaintId: complaint.id,
     vars: { ticketNo: complaint.ticketNo, otp: code, customerName: complaint.customerName },
   });
-  return { ok: true, devCode: whatsAppConfigured() ? undefined : code };
+  return { ok: true, devCode: process.env.SHOW_DEV_OTP === "1" ? code : undefined };
 }
 
 function whatsAppConfigured() {

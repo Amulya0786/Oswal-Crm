@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
+import { cdnUrl } from "@/lib/cdn";
 
 export function BrandLogo({ company = "PUMPS", collapsed = false }: { company?: "PUMPS" | "SOLAR" | string; collapsed?: boolean }) {
   const solar = company === "SOLAR";
@@ -11,7 +12,7 @@ export function BrandLogo({ company = "PUMPS", collapsed = false }: { company?: 
     return (
       <img
         className={`logo-mark ${solar ? "solar" : ""}`}
-        src={solar ? "/brand/solar-logo.png" : "/brand/pumps-favicon.png"}
+        src={cdnUrl(solar ? "/brand/solar-logo.png" : "/brand/pumps-favicon.png")}
         alt=""
       />
     );
@@ -19,7 +20,7 @@ export function BrandLogo({ company = "PUMPS", collapsed = false }: { company?: 
   return (
     <img
       className="logo-full"
-      src={solar ? "/brand/solar-logo.png" : "/brand/pumps-logo.png"}
+      src={cdnUrl(solar ? "/brand/solar-logo.png" : "/brand/pumps-logo.png")}
       alt={solar ? "Oswal Solar" : "Oswal Pumps"}
     />
   );

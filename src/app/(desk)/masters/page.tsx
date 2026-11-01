@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MASTER_DEFS } from "@/server/masters";
+import { ReferenceLoad } from "@/components/reference-load";
 
 export const metadata = { title: "Masters" };
 
@@ -7,7 +8,8 @@ export default function MastersPage() {
   const groups = [...new Set(MASTER_DEFS.map((item) => item.group))];
   return (
     <div>
-      <div className="page-head"><div><p className="kicker">Masters</p><h1>Reference data</h1><p>States through beneficiary uploads. Admins can add, edit and import.</p></div></div>
+      <div className="page-head"><div><h1>Reference data</h1></div></div>
+      <ReferenceLoad />
       {groups.map((group) => (
         <section key={group}>
           <div className="section-label">{group}</div>

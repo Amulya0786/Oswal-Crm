@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { showToast } from "@/components/toast";
+import { compressImage } from "@/lib/compress-image";
 
 export function DetailActions({ complaint, engineers, problems, solutions, checks, can }: {
   complaint: { id: string; status: string };
@@ -18,7 +20,11 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
   async function send(body: object) {
     const response = await fetch(`/api/desk/complaints/${complaint.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json();
-    if (!response.ok) setError(payload.error ?? "Could not update");
+    if (!response.ok) {
+      const message = payload.error ?? "Could not update";
+      setError(message);
+      showToast(message);
+    }
     else { setError(""); setPanel(""); router.refresh(); }
   }
 
@@ -42,7 +48,7 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
       )}
       {panel === "hold" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); send({ action: "hold", holdReason: new FormData(event.currentTarget).get("reason") }); }}>
-          <input name="reason" placeholder="Why is it on hold?" required />
+          <input name="reason" placeholder="Hold reason" required />
           <button className="btn">Hold</button>
         </form>
       )}
@@ -54,12 +60,12 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
           send({ action: "close", problemId: data.get("problemId"), solutionId: data.get("solutionId"), problemText: data.get("problemText"), solutionText: data.get("solutionText"), checklist, serialNo: data.get("serialNo"), missingSerialReason: data.get("missingSerialReason"), nameplateCaptured: data.get("nameplate") === "on" });
         }}>
           <select name="problemId"><option value="">Actual problem</option>{problems.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
-          <input name="problemText" placeholder="Or type the problem" />
+          <input name="problemText" placeholder="Problem" />
           <select name="solutionId"><option value="">Actual solution</option>{solutions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
-          <input name="solutionText" placeholder="Or type the solution" />
-          <input name="serialNo" placeholder="Serial from the nameplate, if you can read it" />
+          <input name="solutionText" placeholder="Solution" />
+          <input name="serialNo" placeholder="Serial number" />
           <label className="chip"><input type="checkbox" name="nameplate" /> Nameplate photo taken</label>
-          <input name="missingSerialReason" placeholder="Reason if the serial is still missing" />
+          <input name="missingSerialReason" placeholder="Missing serial reason" />
           <div className="chips">{checks.map((item) => <label key={item.id} className="chip"><input type="checkbox" name={`check-${item.id}`} /> {item.name}</label>)}</div>
           <button className="btn">Close complaint</button>
         </form>
@@ -67,27 +73,30 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
       {panel === "happy" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); send({ action: "happy", rating: Number(data.get("rating")), remarks: data.get("remarks") }); }}>
           <select name="rating" defaultValue="5">{[1, 2, 3, 4, 5].map((n) => <option key={n}>{n}</option>)}</select>
-          <input name="remarks" placeholder="What did the customer say?" />
+          <input name="remarks" placeholder="Remarks" />
           <button className="btn">Save feedback</button>
         </form>
       )}
       {panel === "cancel" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); send({ action: "cancel", cancelReason: new FormData(event.currentTarget).get("reason") }); }}>
-          <input name="reason" placeholder="Why cancel?" required />
+          <input name="reason" placeholder="Cancel reason" required />
           <button className="btn">Cancel complaint</button>
         </form>
       )}
       {panel === "note" && (
         <form className="stack" onSubmit={(event) => { event.preventDefault(); send({ action: "note", note: new FormData(event.currentTarget).get("note") }); }}>
-          <textarea name="note" placeholder="Internal note" required />
+          <textarea name="note" placeholder="Note" required />
           <button className="btn">Add note</button>
         </form>
       )}
       <form className="filters" onSubmit={async (event) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
+        const file = data.get("file");
+        if (file instanceof File) data.set("file", await compressImage(file));
         data.set("complaintId", complaint.id);
-        await fetch("/api/desk/attachments", { method: "POST", body: data });
+        const response = await fetch("/api/desk/attachments", { method: "POST", body: data });
+        if (!response.ok) showToast("Could not attach the photo");
         router.refresh();
       }}>
         <input type="file" name="file" required />

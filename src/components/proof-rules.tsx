@@ -8,7 +8,6 @@ export function ProofRules() {
   return (
     <section className="panel stack">
       <h2>What a close must include</h2>
-      <p className="muted">Photo, signature or OTP, and GPS. A pin farther than the kilometre limit is flagged. Happy call on the desk stays available when WhatsApp is not used.</p>
       {CALL_TYPES.map((type) => (
         <form key={type.id} className="filters" onSubmit={async (event) => {
           event.preventDefault();

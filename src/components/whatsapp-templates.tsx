@@ -20,7 +20,6 @@ export function WhatsAppTemplates() {
   }, []);
   return (
     <div>
-      <p className="muted">Log mode until a Meta Cloud or BSP key is set. Opt-out, the message log and the hourly limit stay on.</p>
       <div className="filters">
         <select value={companyId} onChange={(event) => setCompanyId(event.target.value)}>
           {companies.map((company) => <option key={company.id} value={company.id}>{company.shortName}</option>)}

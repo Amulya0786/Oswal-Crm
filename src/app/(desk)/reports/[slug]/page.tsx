@@ -17,8 +17,8 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
     <div>
       <div className="page-head"><div><p className="kicker">Report</p><h1>{report.title}</h1><p>{report.blurb} · {report.total} rows</p></div><Link className="btn line" href="/reports">All reports</Link></div>
       <form className="filters">
-        <input type="date" name="from" defaultValue={typeof sp.from === "string" ? sp.from : ""} />
-        <input type="date" name="to" defaultValue={typeof sp.to === "string" ? sp.to : ""} />
+        <label className="stack">From<input name="from" placeholder="dd/mm/yyyy" defaultValue={typeof sp.from === "string" ? sp.from : ""} /></label>
+        <label className="stack">To<input name="to" placeholder="dd/mm/yyyy" defaultValue={typeof sp.to === "string" ? sp.to : ""} /></label>
         <button className="btn">Filter</button>
       </form>
       <div className="table-wrap">

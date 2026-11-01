@@ -2,85 +2,133 @@
 
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/chrome";
-import { companyCodeForCategory } from "@/lib/company-tag";
+import { showToast } from "@/components/toast";
+import { compressImage, fileToDataUrl } from "@/lib/compress-image";
 
-const PUBLIC_CATEGORIES = ["Solar Pump", "Submersible Pump", "Monoblock Pump", "Controller", "Motor", "RMS", "Solar Panel", "Rooftop System", "Inverter"];
+const COPY = {
+  en: {
+    title: "Register a complaint",
+    intro: "Tell us about your pump or solar problem. We will call you back within 24 hours.",
+    name: "Name",
+    mobile: "Mobile",
+    otp: "Mobile code",
+    send: "Send code",
+    sent: "Code sent",
+    district: "District",
+    pin: "Pincode",
+    product: "Product",
+    problem: "What is the problem?",
+    serial: "Serial number, if you can see it",
+    photo: "Photo",
+    captcha: "Captcha",
+    submit: "Submit",
+    again: "This is the same problem again",
+    lang: "हिंदी",
+  },
+  hi: {
+    title: "शिकायत दर्ज करें",
+    intro: "पंप या सोलर की समस्या बताएं। हम 24 घंटे में कॉल करेंगे।",
+    name: "नाम",
+    mobile: "मोबाइल",
+    otp: "मोबाइल कोड",
+    send: "कोड भेजें",
+    sent: "कोड भेज दिया",
+    district: "जिला",
+    pin: "पिनकोड",
+    product: "उत्पाद",
+    problem: "समस्या क्या है?",
+    serial: "सीरियल नंबर, अगर दिखे",
+    photo: "फोटो",
+    captcha: "कैप्चा",
+    submit: "भेजें",
+    again: "यही समस्या फिर से है",
+    lang: "English",
+  },
+};
+
+const PRODUCTS = ["Solar pump", "Submersible pump", "Monoblock pump", "Controller", "Motor", "RMS", "Solar panel", "Rooftop system", "Inverter"];
 
 export default function PublicBookPage() {
-  const [companies, setCompanies] = useState<{ id: string; shortName: string; legalName: string; accent: string; code: string }[]>([]);
-  const [companyId, setCompanyId] = useState("");
+  const [lang, setLang] = useState<"en" | "hi">("en");
   const [captcha, setCaptcha] = useState<{ token: string; question: string } | null>(null);
   const [ticket, setTicket] = useState("");
   const [error, setError] = useState("");
   const [otpSent, setOtpSent] = useState("");
+  const [again, setAgain] = useState(false);
+  const t = COPY[lang];
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("company") === "solar" ? "SOLAR" : "PUMPS";
-    fetch("/api/public/companies").then(async (response) => {
-      if (!response.ok) return;
-      const body = await response.json();
-      setCompanies(body.companies);
-      setCompanyId(body.companies.find((item: { code: string }) => item.code === code)?.id ?? body.companies[0]?.id);
-    }).catch(() => null);
     fetch("/api/public/captcha").then(async (response) => {
       if (response.ok) setCaptcha(await response.json());
     }).catch(() => null);
   }, []);
-  const company = companies.find((item) => item.id === companyId);
   return (
     <main className="main" style={{ maxWidth: 720 }}>
       <BrandLogo />
-      <p className="kicker" style={{ color: company?.accent }}>{company?.legalName ?? "Oswal"}</p>
-      <h1 style={{ fontFamily: "var(--display)" }}>Register a complaint</h1>
-      <p className="muted">For the website. The same Comp. No series, company rule and duplicate checks as the desk.</p>
-      <div className="chips">{companies.map((item) => <button type="button" key={item.id} className={`chip ${item.id === companyId ? "on" : ""}`} onClick={() => setCompanyId(item.id)}>{item.shortName}</button>)}</div>
+      <p className="kicker">Oswal Pumps Ltd · Karnal, Haryana</p>
+      <div className="page-head">
+        <h1 style={{ fontFamily: "var(--display)" }}>{t.title}</h1>
+        <button type="button" className="btn line" onClick={() => setLang(lang === "en" ? "hi" : "en")}>{t.lang}</button>
+      </div>
+      <p>{t.intro}</p>
+      {ticket && <div className="banner">Comp. No {ticket}</div>}
+      {error && <div className="banner bad">{error}</div>}
       <form className="stack" onSubmit={async (event) => {
         event.preventDefault();
         setError("");
         const form = event.currentTarget;
         const data = Object.fromEntries(new FormData(form).entries());
+        const phone = String(data.phone ?? "").replace(/\D/g, "").slice(-10);
+        if (phone.length !== 10) {
+          setError(lang === "hi" ? "10 अंकों का मोबाइल लिखें" : "Enter a 10-digit mobile");
+          return;
+        }
         const files = [...(form.querySelector("input[name=photos]") as HTMLInputElement).files ?? []].slice(0, 3);
-        const photos = await Promise.all(files.filter((file) => file.size <= 1_200_000).map((file) => new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.readAsDataURL(file);
-        })));
+        const photos = await Promise.all(files.map(async (file) => fileToDataUrl(await compressImage(file))));
         const response = await fetch("/api/public/book", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...data, photos, companyId, product: data.product, problem: data.problem, natureText: data.problem, callType: "BREAKDOWN", captchaToken: captcha?.token }),
+          body: JSON.stringify({ ...data, phone, photos, sameIssueAgain: again, product: data.product }),
         });
-        const body = await response.json();
-        if (!response.ok) setError(body.error ?? "Could not book");
-        else setTicket(body.ticketNo);
+        const body = await response.json().catch(() => ({ error: "Could not save, please retry" }));
+        if (response.status === 409) {
+          setAgain(true);
+          setError(body.error ?? (lang === "hi" ? "पहले से शिकायत खुली है। फिर से भेजें।" : "An open complaint already exists. Tick the box and submit again."));
+          showToast(body.error ?? "Could not save, please retry");
+          return;
+        }
+        if (!response.ok) {
+          setError(body.error ?? "Could not save, please retry");
+          showToast(body.error ?? "Could not save, please retry");
+          return;
+        }
+        setTicket(body.ticketNo);
+        setError("");
+        form.reset();
       }}>
-        <input name="customerName" placeholder="Name" required />
-        <div className="filters">
-          <input name="phone" placeholder="Mobile" required />
-          <button type="button" className="btn line" onClick={async () => {
-            const phone = (document.querySelector("input[name=phone]") as HTMLInputElement | null)?.value ?? "";
-            const response = await fetch("/api/public/otp-book", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
-            const body = await response.json();
-            setOtpSent(response.ok ? (body.devCode ? `Code ${body.devCode} (log only)` : "Code sent") : body.error);
-          }}>Send OTP</button>
-        </div>
-        {otpSent && <p className="muted">{otpSent}</p>}
-        <input name="otp" placeholder="Mobile OTP" required />
-        <input name="districtName" placeholder="District" required />
-        <input name="pincode" placeholder="Pincode" required />
-        <select name="product" defaultValue="Solar Pump" onChange={(event) => {
-          const code = companyCodeForCategory(event.target.value);
-          const next = companies.find((item) => item.code === code);
-          if (next) setCompanyId(next.id);
-        }}>{PUBLIC_CATEGORIES.map((name) => <option key={name}>{name}</option>)}</select>
-        <textarea name="problem" placeholder="What is the problem?" required />
-        <input name="serialNo" placeholder="Serial, if you can see it" />
-        <label className="stack">Photos<input name="photos" type="file" accept="image/*" multiple /></label>
-        <label className="stack">{captcha?.question ?? "Captcha"}<input name="captchaAnswer" required placeholder="Answer" /></label>
-        <button className="btn">Submit</button>
+        <label className="stack">{t.name}<input name="customerName" required /></label>
+        <label className="stack">{t.mobile}<input name="phone" inputMode="numeric" required /></label>
+        <button type="button" className="btn line" onClick={async () => {
+          const phone = String(new FormData(document.querySelector("form") as HTMLFormElement).get("phone") ?? "").replace(/\D/g, "").slice(-10);
+          const response = await fetch("/api/public/otp-book", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) { setError(body.error ?? "Could not send the code"); showToast(body.error ?? "Could not send the code"); return; }
+          setOtpSent(body.devCode ? `${t.sent}: ${body.devCode}` : t.sent);
+        }}>{t.send}</button>
+        {otpSent && <p>{otpSent}</p>}
+        <label className="stack">{t.otp}<input name="otp" inputMode="numeric" required /></label>
+        <label className="stack">{t.district}<input name="districtName" required /></label>
+        <label className="stack">{t.pin}<input name="pincode" inputMode="numeric" required /></label>
+        <label className="stack">{t.product}
+          <select name="product" required defaultValue="Solar pump">{PRODUCTS.map((item) => <option key={item}>{item}</option>)}</select>
+        </label>
+        <label className="stack">{t.problem}<textarea name="problem" required /></label>
+        <label className="stack">{t.serial}<input name="serialNo" /></label>
+        <label className="stack">{t.photo}<input name="photos" type="file" accept="image/*" multiple /></label>
+        <label className="stack">{captcha?.question ?? t.captcha}<input name="captchaAnswer" required /></label>
+        <input type="hidden" name="captchaToken" value={captcha?.token ?? ""} />
+        <label className="chip"><input type="checkbox" checked={again} onChange={(event) => setAgain(event.target.checked)} /> {t.again}</label>
+        <button className="btn">{t.submit}</button>
       </form>
-      <p className="muted">Embed on oswalpumps.com with an iframe pointed at /book. The API is POST /api/public/book after the OTP and captcha.</p>
-      {ticket && <div className="banner">Your Comp. No is <b className="mono">{ticket}</b>.</div>}
-      {error && <div className="banner bad">{error}</div>}
     </main>
   );
 }

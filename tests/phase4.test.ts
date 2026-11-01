@@ -31,6 +31,17 @@ describe("whatsapp menu", () => {
     expect(solarConfirm.messages[0]).toContain("Oswal Solar");
   });
 
+  it("keeps a typed 9 as a name and asks for a complaint number", () => {
+    const named = chatTurn(chatTurn(freshChat(), "1").session, "9");
+    expect(named.session.lang).toBe("en");
+    expect(named.session.step).toBe("name");
+    const asking = chatTurn(freshChat(), "2");
+    expect(asking.session.step).toBe("status");
+    expect(asking.action).toBeUndefined();
+    const checked = chatTurn(asking.session, "OPL261101001");
+    expect(checked.action).toMatchObject({ type: "status", ticket: "OPL261101001" });
+  });
+
   it("switches language and creates an agent handoff", () => {
     const hindi = chatTurn(freshChat(), "9");
     expect(hindi.session.lang).toBe("hi");

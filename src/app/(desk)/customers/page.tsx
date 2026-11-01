@@ -8,27 +8,28 @@ export const metadata = { title: "Customers" };
 export default async function CustomersPage() {
   const { user, scope } = await getScope();
   if (!user) return null;
+  const brandLimit = user.role === "OEM_PARTNER"
+    ? { complaints: { some: { brandId: { in: user.brandIds.length ? user.brandIds : ["none"] } } } }
+    : {};
   const where = scope === "all"
     ? user.role === "ADMIN"
-      ? { mergedIntoId: null }
-      : { mergedIntoId: null, OR: [{ companyId: { in: user.companyIds } }, { complaints: { some: { companyId: { in: user.companyIds } } } }] }
-    : { mergedIntoId: null, OR: [{ companyId: scope }, { complaints: { some: { companyId: scope } } }] };
+      ? { mergedIntoId: null, ...brandLimit }
+      : { mergedIntoId: null, OR: [{ companyId: { in: user.companyIds } }, { complaints: { some: { companyId: { in: user.companyIds } } } }], ...brandLimit }
+    : { mergedIntoId: null, OR: [{ companyId: scope }, { complaints: { some: { companyId: scope } } }], ...brandLimit };
   const customers = await prisma.customer.findMany({
     where,
     orderBy: { name: "asc" },
-    take: 200,
+    take: 50,
     include: { _count: { select: { complaints: true, assets: true } }, district: { select: { name: true } } },
   });
   return (
     <div>
       <div className="page-head">
         <div>
-          <p className="kicker">Service</p>
           <h1>Customers</h1>
-          <p>One record per person. Open a customer to see every complaint and installed product.</p>
         </div>
       </div>
-      {!customers.length && <EmptyState title="No customers yet" body="A customer record is created the first time you book a complaint for that mobile." />}
+      {!customers.length && <EmptyState title="No customers yet" body="" />}
       {!!customers.length && (
         <div className="table-wrap">
           <table>
