@@ -4,14 +4,18 @@ import { performanceScore, incentiveFor } from "@/lib/phase3";
 
 function presentedKey(req: Request) {
   const url = new URL(req.url);
-  return req.headers.get("x-report-key") || url.searchParams.get("key") || "";
+  if (url.searchParams.get("key")) return "";
+  return req.headers.get("x-report-key") || "";
 }
 
 async function authorize(req: Request) {
   const presented = presentedKey(req);
   if (!presented) return false;
-  const keys = await prisma.reportKey.findMany({ where: { revokedAt: null }, select: { keyHash: true } });
-  return reportKeyAccepted(presented, keys.map((row) => row.keyHash));
+  const keys = await prisma.reportKey.findMany({ where: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { id: true, keyHash: true } });
+  const match = keys.find((row) => reportKeyAccepted(presented, [row.keyHash]));
+  if (!match) return false;
+  await prisma.reportKey.update({ where: { id: match.id }, data: { lastUsedAt: new Date() } });
+  return true;
 }
 
 function windowOf(req: Request) {
@@ -31,7 +35,8 @@ function csv(rows: Record<string, unknown>[]) {
   for (const row of rows) {
     lines.push(headers.map((key) => {
       const value = row[key];
-      const text = value == null ? "" : String(value);
+      let text = value == null ? "" : String(value);
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     }).join(","));
   }
@@ -39,7 +44,8 @@ function csv(rows: Record<string, unknown>[]) {
 }
 
 export async function GET(req: Request, context: { params: Promise<{ feed: string }> }) {
-  if (!(await authorize(req))) return Response.json({ error: "Reporting key required" }, { status: 401 });
+  if (new URL(req.url).searchParams.get("key")) return Response.json({ error: "Send the key in the x-report-key header" }, { status: 401 });
+  if (!(await authorize(req))) return Response.json({ error: "Reporting key required. Send it in the x-report-key header." }, { status: 401 });
   const { feed } = await context.params;
   const url = new URL(req.url);
   const format = url.searchParams.get("format") === "csv" || feed.endsWith(".csv") ? "csv" : "json";
@@ -95,6 +101,10 @@ export async function GET(req: Request, context: { params: Promise<{ feed: strin
   } else {
     return Response.json({ error: "Unknown feed" }, { status: 404 });
   }
-  if (format === "csv") return new Response(csv(rows), { headers: { "Content-Type": "text/csv; charset=utf-8" } });
-  return Response.json({ "@odata.context": `${url.origin}/api/report/$metadata`, value: rows });
+  const headers = new Headers();
+  if (format === "csv") {
+    headers.set("Content-Type", "text/csv; charset=utf-8");
+    return new Response(`\uFEFF${csv(rows)}`, { headers });
+  }
+  return Response.json({ "@odata.context": `${url.origin}/api/report/$metadata`, value: rows }, { headers });
 }

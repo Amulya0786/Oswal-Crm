@@ -159,7 +159,19 @@ export async function earnings(user: SessionUser) {
   const start = new Date();
   start.setDate(1);
   start.setHours(0, 0, 0, 0);
-  const visits = await prisma.complaint.count({ where: { engineerId: user.engineerId, status: { in: ["CLOSED", "HAPPY_CALLING"] }, closedAt: { gte: start } } });
-  const rate = Number(process.env.VISIT_RATE ?? 0);
-  return { visits, rate, amount: visits * rate };
+  const rows = await prisma.complaint.groupBy({
+    by: ["callType"],
+    where: { engineerId: user.engineerId, status: { in: ["CLOSED", "HAPPY_CALLING"] }, closedAt: { gte: start } },
+    _count: true,
+  });
+  const settings = await prisma.appSetting.findMany({ where: { key: { startsWith: "VISIT_RATE_" } } });
+  const rates = new Map(settings.map((row) => [row.key.replace("VISIT_RATE_", ""), Number(row.value) || 0]));
+  const fallback = Number(process.env.VISIT_RATE ?? 0);
+  let amount = 0;
+  let visits = 0;
+  for (const row of rows) {
+    visits += row._count;
+    amount += row._count * (rates.get(row.callType) ?? fallback);
+  }
+  return { visits, rate: fallback, amount };
 }

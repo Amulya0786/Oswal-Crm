@@ -9,6 +9,7 @@ import { previewImport, commitImport } from "@/server/importer";
 import { enqueueExport } from "@/server/exports";
 import { filtersFromRecord } from "@/server/scope";
 import { listComplaints } from "@/server/query";
+import { release3 } from "@/server/release3";
 import { runEscalation, runSummary } from "@/server/jobs";
 import { classifyDuplicates } from "@/lib/duplicates";
 import { findCustomer, loadCustomerHistory, mergeCustomers } from "@/server/link";
@@ -66,6 +67,8 @@ async function route(method: string, slug: string[], req: Request) {
   rejectTemporaryPassword(session.user);
   const { user, scope } = session;
   const [head, id, extra] = slug;
+  const handled = await release3(method, head, id, user, req, url);
+  if (handled) return handled;
 
   if (method === "GET" && head === "live") return json({ version: await getVersion() });
 
@@ -279,8 +282,8 @@ async function route(method: string, slug: string[], req: Request) {
       prisma.company.findMany({ where: user.role === "ADMIN" ? {} : { id: { in: user.companyIds } }, orderBy: { code: "asc" } }),
       prisma.state.findMany({ orderBy: { name: "asc" } }),
       prisma.district.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, stateId: true } }),
-      prisma.area.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, districtId: true } }),
-      prisma.pincode.findMany({ select: { code: true, districtId: true, areaId: true } }),
+      Promise.resolve([] as { id: string; name: string; districtId: string }[]),
+      Promise.resolve([] as { code: string; districtId: string; areaId: string | null }[]),
       prisma.category.findMany({ orderBy: { name: "asc" } }),
       prisma.product.findMany({ where: { active: true, ...companyFilter }, orderBy: { name: "asc" } }),
       prisma.engineer.findMany({ where: { active: true, ...companyFilter }, orderBy: { name: "asc" } }),

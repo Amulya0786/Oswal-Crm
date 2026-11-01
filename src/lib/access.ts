@@ -2,6 +2,7 @@ import type { Role } from "@/lib/types";
 
 const BLOCKED: Partial<Record<Role, string[]>> = {
   CALL_CENTRE: ["/masters", "/reports", "/import", "/settings", "/security", "/connect", "/map", "/attendance", "/performance", "/assist", "/analytics", "/exports"],
+  CALL_CLOSER: ["/masters", "/reports", "/import", "/settings", "/security", "/connect", "/map", "/attendance", "/performance", "/assist", "/analytics", "/exports"],
   OEM_PARTNER: ["/masters", "/settings", "/security", "/import", "/connect", "/map", "/attendance", "/performance", "/assist", "/analytics"],
 };
 

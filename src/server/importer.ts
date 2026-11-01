@@ -85,7 +85,14 @@ export async function commitImport(user: SessionUser, input: { token: string; en
   const fileName = await loadObject(`imports/${token}.name`).then((bytes) => bytes.toString("utf8")).catch(() => "upload.csv");
   const table = await readTableBytes(await loadObject(`imports/${token}`), fileName);
   const rows = table.rows.map((row) => mapped(row, input.mapping));
-  if (input.entity === "complaints") return importComplaints(user, rows, input.companyId, resolveHistoryCutoff(input.cutoff, process.env.IMPORT_CUTOFF));
+  if (input.entity === "complaints") {
+    await prisma.appSetting.upsert({ where: { key: "importRunning" }, create: { key: "importRunning", value: "1" }, update: { value: "1" } });
+    try {
+      return await importComplaints(user, rows, input.companyId, resolveHistoryCutoff(input.cutoff, process.env.IMPORT_CUTOFF));
+    } finally {
+      await prisma.appSetting.upsert({ where: { key: "importRunning" }, create: { key: "importRunning", value: "0" }, update: { value: "0" } });
+    }
+  }
   if (input.entity === "customers") return importCustomers(rows, input.companyId);
   if (input.entity === "products") return importProducts(rows, input.companyId);
   if (input.entity === "users") {
@@ -117,6 +124,19 @@ async function ensurePlace(stateByName: Map<string, any>, stateName?: string, di
     stateByName.set(stateLabel.toLowerCase(), state);
   }
   let district = state?.districts.find((item: { name: string }) => item.name.toLowerCase() === districtLabel.toLowerCase());
+  if (state && districtLabel && !district) {
+    const alias = await prisma.placeAlias.findFirst({ where: { kind: "district", stateName: state.name, alias: { equals: districtLabel, mode: "insensitive" } } });
+    if (alias) {
+      district = state.districts.find((item: { id: string }) => item.id === alias.districtId);
+      if (!district) {
+        const found = await prisma.district.findUnique({ where: { id: alias.districtId }, include: { areas: true } });
+        if (found) {
+          district = found;
+          state.districts.push(found);
+        }
+      }
+    }
+  }
   if (state && districtLabel && !district) {
     const created = await prisma.district.create({ data: { name: districtLabel, stateId: state.id } });
     district = { ...created, areas: [] };

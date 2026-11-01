@@ -1,6 +1,7 @@
 import { getScope, rejectTemporaryPassword } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
 import { checkIn, earnings, fieldClose, issueCloseOtp, punch, todayVisits } from "@/server/field";
+import { respondToOffer } from "@/server/assignment";
 import { updateComplaint } from "@/server/complaints";
 import { prisma } from "@/server/db";
 
@@ -37,6 +38,14 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     rejectTemporaryPassword(user);
     const { slug } = await context.params;
     const body = await readJson(req);
+    if (slug[0] === "serial" && user.engineerId) {
+      await prisma.complaint.updateMany({ where: { id: String(body.complaintId), engineerId: user.engineerId }, data: { serialNo: String(body.serial ?? "").slice(0, 40) } });
+      return json({ ok: true });
+    }
+    if (slug[0] === "respond") {
+      if (!user.engineerId) return json({ error: "Technician login required" }, 403);
+      return json(await respondToOffer(user.engineerId, String(body.complaintId), body.decision === "reject" ? "reject" : "accept", body.reason ? String(body.reason) : null));
+    }
     if (slug[0] === "checkin") return json(await checkIn(user, String(body.complaintId), body.kind === "ARRIVE" ? "ARRIVE" : "START", body.lat, body.lng));
     if (slug[0] === "otp") return json(await issueCloseOtp(user, String(body.complaintId)));
     if (slug[0] === "close") return json(await fieldClose(user, String(body.complaintId), body));

@@ -22,6 +22,8 @@ export const REPORTS = [
   { slug: "mtbf", title: "Mean time between failures", kind: "aggregate" as const, blurb: "Average days between complaints on the same installed product." },
   { slug: "reopen-technicians", title: "Closures that reopen", kind: "aggregate" as const, blurb: "Technicians whose closures are followed by another complaint within 30 days." },
   { slug: "first-time-fix", title: "First-time fix", kind: "aggregate" as const, blurb: "Share of closures that were not a repeat and did not reopen within 30 days." },
+  { slug: "customer-product", title: "Customer product summary", kind: "aggregate" as const, blurb: "Installed products by customer." },
+  { slug: "past-service", title: "Equipment past service", kind: "rows" as const, blurb: "Earlier visits for the same serial." },
 ];
 
 function dayStart(value?: string) {
@@ -192,6 +194,19 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
       rows: rows.map((row) => ({ technician: row.technician, reopened: Number(row.reopened) })),
       total: rows.length, page: 1, pageSize: rows.length,
     };
+  }
+  if (slug === "customer-product") {
+    const rows = await prisma.$queryRaw<{ customer: string; product: string; n: number }[]>`
+      SELECT c."customerName" AS customer, COALESCE(c."productDetails", 'Unknown') AS product, COUNT(*)::int AS n
+      FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 200`;
+    return { ...meta, columns: cols(["customer", "product", "n"]), rows: rows.map((row) => ({ ...row })), total: rows.length, page: 1, pageSize: rows.length };
+  }
+  if (slug === "past-service") {
+    const rows = await prisma.$queryRaw<{ serial: string; tickets: number; last: Date }[]>`
+      SELECT c."serialNorm" AS serial, COUNT(*)::int AS tickets, MAX(c."bookDate") AS last
+      FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} AND c."serialNorm" IS NOT NULL
+      GROUP BY 1 HAVING COUNT(*) > 1 ORDER BY 2 DESC LIMIT 200`;
+    return { ...meta, columns: cols(["serial", "tickets", "last"]), rows: rows.map((row) => ({ serial: row.serial, tickets: row.tickets, last: String(row.last) })), total: rows.length, page: 1, pageSize: rows.length };
   }
   if (slug === "first-time-fix") {
     const where = reportWhere(user, scope, filters);

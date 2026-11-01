@@ -45,6 +45,12 @@ model User {
   active             Boolean  @default(true)
   mustChangePassword Boolean @default(false)
   isTest             Boolean  @default(false)
+  failedLogins       Int      @default(0)
+  lockedUntil        DateTime?
+  totpSecret         String?
+  totpEnabled        Boolean  @default(false)
+  resetTokenHash     String?
+  resetExpires       DateTime?
   engineerId   String?  @unique
   createdAt    DateTime @default(now())
 
@@ -118,6 +124,7 @@ model LoginHistory {
   success   Boolean
   ip        String?
   userAgent String?
+  note      String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([at])
@@ -148,9 +155,19 @@ model District {
   customers  Customer[]
   engineers  Engineer[]
   aliases    DistrictAlias[]
+  active       Boolean  @default(true)
+  mergedIntoId String?
+  lgdCode      String?
+  mergedInto   District?  @relation("DistrictMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   District[] @relation("DistrictMerge")
+  tehsils      Tehsil[]
+  cities       City[]
+  placeAliases PlaceAlias[]
+  engineerLinks EngineerDistrict[]
 
   @@unique([stateId, name])
   @@index([stateId])
+  @@index([mergedIntoId])
 }
 
 model DistrictAlias {
@@ -169,6 +186,7 @@ model Area {
   pincodes   Pincode[]
   complaints Complaint[]
   customers  Customer[]
+  active     Boolean @default(true)
 
   @@unique([districtId, name])
   @@index([districtId])
@@ -328,15 +346,24 @@ model Engineer {
   complaints Complaint[]
   locations  TechPing[]
   punches    AttendancePunch[]
+  category       String?
+  signaturePath  String?
+  brandId        String?
+  coveredDistricts EngineerDistrict[]
+  stateHistory     EngineerStateHistory[]
+  leaves           LeaveRequest[]
+  expenses         ExpenseClaim[]
 
   @@index([companyId, active])
   @@index([districtId])
+  @@index([stateId])
 }
 
 model Brand {
   id         String      @id @default(cuid())
   companyId  String
   name       String
+  active     Boolean     @default(true)
   company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   users      UserBrand[]
   complaints Complaint[]
@@ -522,6 +549,29 @@ model Complaint {
   escalatedToId     String?
   escalatedAt       DateTime?
   createdById       String?
+  email             String?
+  purchaseDate      DateTime?
+  portal            String?
+  subType           String?
+  msedclRequestNo   String?
+  msedclStatus      String?
+  requestSubtype    String?
+  msedclVideoUrl    String?
+  version           Int       @default(0)
+  qaFlag            Boolean   @default(false)
+  callbackDueAt     DateTime?
+  idempotencyKey    String?   @unique
+  tehsilId          String?
+  cityId            String?
+  serviceCharge     Float?
+  spareCharge       Float?
+  paymentNote       String?
+  paidAt            DateTime?
+  suggestedEngineerId String?
+  suggestedName     String?
+  offeredAt         DateTime?
+  acceptedAt        DateTime?
+  seniorReview      Boolean   @default(false)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -659,6 +709,7 @@ model SlaPolicy {
   companyId   String
   callType    String
   hours       Int
+  callbackHours Int   @default(24)
   warnPercent Int     @default(75)
   active      Boolean @default(true)
   company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -815,6 +866,7 @@ model OtpChallenge {
   purpose   String
   expiresAt DateTime
   used      Boolean  @default(false)
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
   @@index([phone, purpose])
@@ -947,9 +999,129 @@ model ReportKey {
   prefix    String
   createdAt DateTime  @default(now())
   revokedAt DateTime?
+  expiresAt DateTime?
+  lastUsedAt DateTime?
+  stateId   String?
+  brandId   String?
 }
 
 model Scheme {
   id   String @id @default(cuid())
   name String @unique
+}
+
+model PlaceAlias {
+  id         String   @id @default(cuid())
+  kind       String
+  stateName  String
+  alias      String
+  districtId String
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([kind, stateName, alias])
+  @@index([districtId])
+}
+
+model Tehsil {
+  id         String   @id @default(cuid())
+  name       String
+  districtId String
+  lgdCode    String?
+  active     Boolean  @default(true)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, name])
+  @@index([districtId])
+}
+
+model City {
+  id         String   @id @default(cuid())
+  name       String
+  districtId String
+  kind       String?
+  pincodes   String   @default("")
+  lgdCode    String?
+  active     Boolean  @default(true)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, name])
+  @@index([districtId])
+}
+
+model EngineerDistrict {
+  engineerId String
+  districtId String
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@id([engineerId, districtId])
+}
+
+model EngineerStateHistory {
+  id         String    @id @default(cuid())
+  engineerId String
+  stateId    String?
+  from       DateTime  @default(now())
+  note       String?
+  engineer   Engineer  @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, from])
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  engineerId  String
+  from        DateTime
+  to          DateTime
+  reason      String
+  status      String    @default("PENDING")
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  engineer    Engineer  @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, status])
+}
+
+model ExpenseClaim {
+  id          String   @id @default(cuid())
+  engineerId  String
+  complaintId String?
+  type        String
+  amount      Float
+  detail      String?
+  at          DateTime @default(now())
+  status      String   @default("SUBMITTED")
+  engineer    Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, at])
+}
+
+model ServiceContract {
+  id          String    @id @default(cuid())
+  companyId   String
+  customerId  String?
+  assetId     String?
+  productName String?
+  start       DateTime
+  end         DateTime
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now())
+
+  @@index([end, status])
+  @@index([companyId])
+}
+
+model DeskAlert {
+  id          String    @id @default(cuid())
+  kind        String
+  message     String
+  complaintId String?
+  stateId     String?
+  engineerId  String?
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  @@index([stateId, readAt])
+  @@index([kind, createdAt])
 }

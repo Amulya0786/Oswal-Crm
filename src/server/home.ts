@@ -44,13 +44,14 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
   const tomorrow = midnightShift(now, 1);
   const monthAgo = new Date(now.getTime() - 30 * 86400000);
   const place = stateName ? Prisma.sql`c."districtName"` : Prisma.sql`c."stateName"`;
-  const [kpi] = await prisma.$queryRaw<{ booked: number; closed: number; pending: number; overdue: number; repeats: number; happy: number; rating: number }[]>`
+  const [kpi] = await prisma.$queryRaw<{ booked: number; closed: number; pending: number; overdue: number; repeats: number; happy: number; rating: number; first_contact: number }[]>`
     SELECT
       COUNT(*) FILTER (WHERE c."bookDate" >= ${today} AND c."bookDate" < ${tomorrow})::int AS booked,
-      COUNT(*) FILTER (WHERE c.status IN ('CLOSED','HAPPY_CALLING') AND c."closedAt" >= ${today} AND c."closedAt" < ${tomorrow})::int AS closed,
+      COUNT(*) FILTER (WHERE c.status IN ('CLOSED','CLOSED_UNVERIFIED','HAPPY_CALLING') AND c."closedAt" >= ${today} AND c."closedAt" < ${tomorrow})::int AS closed,
       COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS pending,
-      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= ${now})::int AS overdue,
+      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND COALESCE(c."callbackDueAt", c."slaDueAt") IS NOT NULL AND COALESCE(c."callbackDueAt", c."slaDueAt") <= ${now})::int AS overdue,
       COUNT(*) FILTER (WHERE c."repeatFlag" = true AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS repeats,
+      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callbackDueAt" IS NOT NULL AND c."callbackDueAt" <= ${now} AND c."assignedAt" IS NULL)::int AS first_contact,
       COUNT(*) FILTER (WHERE c."feedbackPending" = true)::int AS happy,
       COALESCE(ROUND(AVG(c."happyRating") FILTER (WHERE c."happyRating" IS NOT NULL))::int, 0) AS rating
     FROM "Complaint" c
@@ -127,13 +128,47 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     ORDER BY c."bookDate" DESC
     LIMIT 8
   `;
+  const filled = [];
+  for (let offset = 29; offset >= 0; offset -= 1) {
+    const day = new Date(now.getTime() - offset * 86400000);
+    const key = day.toISOString().slice(0, 10);
+    const found = trend.find((row) => new Date(row.day).toISOString().slice(0, 10) === key);
+    filled.push({ day: key, booked: found?.booked ?? 0 });
+  }
+  const byCall = await prisma.$queryRaw<{ label: string; n: number }[]>`
+    SELECT c."callType" AS label, COUNT(*)::int AS n FROM "Complaint" c
+    WHERE ${where} ${extra} AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING')
+    GROUP BY 1 ORDER BY 2 DESC
+  `;
+  const byStatus = await prisma.$queryRaw<{ label: string; n: number }[]>`
+    SELECT c.status AS label, COUNT(*)::int AS n FROM "Complaint" c
+    WHERE ${where} ${extra} GROUP BY 1 ORDER BY 2 DESC
+  `;
+  const monthBooked = await prisma.$queryRaw<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM "Complaint" c
+    WHERE ${where} ${extra} AND c."bookDate" >= ${monthAgo}
+  `;
+  const latest = await prisma.$queryRaw<{ id: string; ticketNo: string; customerName: string; status: string; stateName: string | null }[]>`
+    SELECT c.id, c."ticketNo", c."customerName", c.status, c."stateName"
+    FROM "Complaint" c
+    WHERE ${where} ${extra} AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING')
+    ORDER BY c."bookDate" DESC LIMIT 8
+  `;
+  const amc = await prisma.serviceContract.count({ where: { status: "ACTIVE", end: { lte: new Date(now.getTime() + 30 * 86400000) } } });
+  const unassigned = await prisma.complaint.count({ where: { status: "OPEN", engineerId: null, excludeFromMis: false } });
   return {
-    kpi: kpi ?? { booked: 0, closed: 0, pending: 0, overdue: 0, repeats: 0, happy: 0, rating: 0 },
+    kpi: kpi ?? { booked: 0, closed: 0, pending: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0 },
+    byCall,
+    byStatus,
+    monthBooked: Number(monthBooked[0]?.n ?? 0),
+    latest,
+    amc,
+    unassigned,
     ageing,
     places,
     technicians,
     companies,
-    trend,
+    trend: filled,
     followUps,
     happyQueue,
     todayBooked,

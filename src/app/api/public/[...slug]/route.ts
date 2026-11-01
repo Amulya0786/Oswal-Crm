@@ -32,6 +32,10 @@ export async function GET(req: Request, context: { params: Promise<{ slug: strin
     const issued = issueCaptcha(secret());
     return json({ token: issued.token, question: issued.question });
   }
+  if (slug[0] === "helpline") {
+    const row = await prisma.appSetting.findUnique({ where: { key: "HELPLINE" } });
+    return json({ helpline: row?.value || process.env.HELPLINE || "" });
+  }
   if (slug[0] === "companies") {
     const companies = await prisma.company.findMany({ where: { active: true }, orderBy: { code: "asc" }, select: { id: true, code: true, shortName: true, legalName: true, accent: true, logoText: true } });
     return json({ companies });
@@ -64,13 +68,12 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
       const phone = normalizePhone(body.phone);
       const ticketNo = String(body.ticketNo ?? "").toUpperCase();
       const complaint = await prisma.complaint.findUnique({ where: { ticketNo } });
-      if (!complaint || complaint.phone !== phone) return json({ error: "Complaint and mobile do not match" }, 404);
+      if (!complaint || complaint.phone !== phone) return json({ ok: true });
       if (await tooManyOtps(phone, "TRACK")) return json({ error: "Too many codes. Try again in an hour." }, 429);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       await prisma.otpChallenge.create({
         data: { phone, ticketNo, code, purpose: "TRACK", expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
       });
-      console.log(`[otp] ${phone} ${ticketNo} -> ${code}`);
       return json({ ok: true, devCode: devOtp(code) });
     }
     if (slug[0] === "track") {
@@ -80,7 +83,12 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
         where: { phone, ticketNo, purpose: "TRACK", used: false, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: "desc" },
       });
-      if (!challenge || challenge.code !== String(body.code)) return json({ error: "OTP is wrong or expired" }, 401);
+      if (!challenge || challenge.attempts >= 5) return json({ error: "OTP is wrong or expired" }, 401);
+      if (challenge.code !== String(body.code)) {
+        const attempts = challenge.attempts + 1;
+        await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { attempts, used: attempts >= 5 } });
+        return json({ error: "OTP is wrong or expired" }, 401);
+      }
       await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { used: true } });
       const complaint = await prisma.complaint.findUnique({ where: { ticketNo }, include: { company: true, events: { orderBy: { at: "asc" }, take: 30 } } });
       if (!complaint) return json({ error: "Not found" }, 404);
@@ -104,9 +112,10 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
     if (slug[0] === "rate") {
       const token = String(body.token ?? "");
       const rating = Number(body.rating);
-      const complaint = await prisma.complaint.findFirst({ where: { OR: [{ trackToken: token }, { ticketNo: token.toUpperCase() }] } });
+      const complaint = token ? await prisma.complaint.findFirst({ where: { trackToken: token } }) : null;
       if (!complaint) return json({ error: "Complaint not found" }, 404);
-      if (!complaint.feedbackPending && complaint.happyRating == null) return json({ error: "Rating opens after the visit is closed" }, 400);
+      if (complaint.happyRating != null) return json({ error: "This complaint already has a rating" }, 409);
+      if (!complaint.feedbackPending) return json({ error: "Rating opens after the visit is closed" }, 400);
       if (rating < 1 || rating > 5) return json({ error: "Choose 1 to 5" }, 400);
       await prisma.complaint.update({
         where: { id: complaint.id },
@@ -125,7 +134,6 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
       if (await tooManyOtps(phone, "BOOK")) return json({ error: "Too many codes. Try again in an hour." }, 429);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       await prisma.otpChallenge.create({ data: { phone, code, purpose: "BOOK", expiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
-      console.log(`[otp-book] ${phone} -> ${code}`);
       return json({ ok: true, devCode: devOtp(code) });
     }
     if (slug[0] === "book") {

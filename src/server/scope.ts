@@ -161,7 +161,7 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
   if (filters.closed === "today" || filters.closed === "month") {
     const start = filters.closed === "today" ? kolkataTodayStart(now) : kolkataMonthStart(now);
     const end = filters.closed === "today" ? midnightShift(now, 1) : kolkataNextMonthStart(now);
-    parts.push(Prisma.sql`${status} = 'CLOSED' AND ${col(alias, "closedAt")} >= ${start} AND ${col(alias, "closedAt")} < ${end}`);
+    parts.push(Prisma.sql`${status} IN ('CLOSED','CLOSED_UNVERIFIED','HAPPY_CALLING') AND ${col(alias, "closedAt")} >= ${start} AND ${col(alias, "closedAt")} < ${end}`);
   }
   if (filters.happy === "today" || filters.happy === "month") {
     const start = filters.happy === "today" ? kolkataTodayStart(now) : kolkataMonthStart(now);

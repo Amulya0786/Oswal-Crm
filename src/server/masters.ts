@@ -154,7 +154,7 @@ export async function masterOptions() {
     prisma.company.findMany({ orderBy: { code: "asc" } }),
     prisma.state.findMany({ orderBy: { name: "asc" } }),
     prisma.district.findMany({ orderBy: { name: "asc" }, include: { state: true } }),
-    prisma.area.findMany({ orderBy: { name: "asc" }, take: 500 }),
+    prisma.area.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 30 }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
     prisma.hsnCode.findMany({ orderBy: { code: "asc" } }),
     prisma.pumpHead.findMany({ orderBy: { label: "asc" } }),

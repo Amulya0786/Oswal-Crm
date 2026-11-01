@@ -80,6 +80,19 @@ export const DEFAULT_SLA_HOURS: Record<string, number> = {
   SCHEME: 240,
 };
 
+export const FIRST_CONTACT_HOURS = 24;
+
+export function normalizeCustomerName(name: string) {
+  const trimmed = name.trim().replace(/\s+/g, " ");
+  if (/^\d+$/.test(trimmed) || /^(abc|test|na|xxx|asdf|customer)$/i.test(trimmed)) {
+    throw new Error("Enter the customer's real name");
+  }
+  if (/^[\u0000-\u007F]+$/.test(trimmed)) {
+    return trimmed.replace(/\b([A-Za-z])([A-Za-z']*)/g, (_, a: string, b: string) => a.toUpperCase() + b.toLowerCase());
+  }
+  return trimmed;
+}
+
 export function normalizeStatus(input: string | null | undefined): string | null {
   if (!input) return null;
   const s = input.trim().toLowerCase().replace(/[_]+/g, " ").replace(/\s+/g, " ");

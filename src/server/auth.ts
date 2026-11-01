@@ -12,13 +12,13 @@ const ROLE_SET = new Set<string>(ROLES);
 export function capabilities(role: Role): Capabilities {
   const can = (roles: Role[]) => roles.includes(role);
   return {
-    book: can(["ADMIN", "CALL_CENTRE", "AREA_MANAGER", "STATE_HEAD", "DEALER", "OEM_PARTNER"]),
+    book: can(["ADMIN", "CALL_CENTRE", "CALL_CLOSER", "AREA_MANAGER", "STATE_HEAD", "DEALER", "OEM_PARTNER"]),
     assign: can(["ADMIN", "AREA_MANAGER", "STATE_HEAD"]),
-    close: can(["ADMIN", "AREA_MANAGER", "STATE_HEAD", "TECHNICIAN"]),
-    happy: can(["ADMIN", "CALL_CENTRE"]),
+    close: can(["ADMIN", "CALL_CLOSER", "AREA_MANAGER", "STATE_HEAD", "TECHNICIAN"]),
+    happy: can(["ADMIN", "CALL_CENTRE", "CALL_CLOSER"]),
     cancel: can(["ADMIN", "STATE_HEAD"]),
     hold: can(["ADMIN", "AREA_MANAGER", "STATE_HEAD", "TECHNICIAN"]),
-    note: can(["ADMIN", "CALL_CENTRE", "AREA_MANAGER", "STATE_HEAD", "TECHNICIAN", "DEALER", "OEM_PARTNER"]),
+    note: can(["ADMIN", "CALL_CENTRE", "CALL_CLOSER", "AREA_MANAGER", "STATE_HEAD", "TECHNICIAN", "DEALER", "OEM_PARTNER"]),
     reopen: can(["ADMIN", "STATE_HEAD"]),
     masterWrite: can(["ADMIN"]),
     masterView: can(["ADMIN", "AREA_MANAGER", "STATE_HEAD"]),
@@ -107,23 +107,38 @@ export const getScope = cache(async () => {
   return { user, scope: user.companyIds[0] ?? "all" };
 });
 
-export async function login(email: string, password: string, meta: { ip?: string; userAgent?: string }) {
-  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() }, include: userInclude });
+export async function login(email: string, password: string, meta: { ip?: string; userAgent?: string; totp?: string }) {
+  const normalized = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email: normalized }, include: userInclude });
+  if (user?.lockedUntil && user.lockedUntil > new Date()) {
+    await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip: meta.ip, userAgent: meta.userAgent?.slice(0, 240), note: "locked" } });
+    return { locked: true as const };
+  }
   const ok = Boolean(user && user.active && (await bcrypt.compare(password, user.passwordHash)));
   await prisma.loginHistory.create({
-    data: {
-      userId: user?.id,
-      email: email.trim().toLowerCase(),
-      success: ok,
-      ip: meta.ip,
-      userAgent: meta.userAgent?.slice(0, 240),
-    },
+      data: { userId: user?.id, email: normalized, success: ok, ip: meta.ip, userAgent: meta.userAgent?.slice(0, 240), note: ok ? null : "failed" },
   });
-  if (!ok || !user) return null;
+  if (!ok || !user) {
+    if (user) {
+      const failed = user.failedLogins + 1;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLogins: failed, lockedUntil: failed >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null },
+      });
+      if (failed >= 5) {
+        await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip: meta.ip, note: "locked for 15 minutes" } });
+      }
+    }
+    return null;
+  }
+  if ((user.role === "ADMIN" || user.role === "STATE_HEAD") && !user.totpEnabled) return { setupTotp: true as const, userId: user.id };
+  if (user.totpEnabled) {
+    const { totpMatches } = await import("./totp");
+    if (!user.totpSecret || !totpMatches(user.totpSecret, meta.totp ?? "")) return { needsTotp: true as const };
+  }
+  await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
-  await prisma.session.create({
-    data: { token, userId: user.id, expiresAt: new Date(Date.now() + 7 * 86400000) },
-  });
+  await prisma.session.create({ data: { token, userId: user.id, expiresAt: new Date(Date.now() + 7 * 86400000) } });
   return { token, user: toSessionUser(user) };
 }
 

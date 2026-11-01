@@ -1,6 +1,7 @@
 export const ROLES = [
   "ADMIN",
   "CALL_CENTRE",
+  "CALL_CLOSER",
   "AREA_MANAGER",
   "STATE_HEAD",
   "TECHNICIAN",

@@ -3,14 +3,14 @@ import { prisma, bumpVersion } from "./db";
 import { HttpError } from "./http";
 import { nextTicketNo, rememberTicket } from "./ticket-seq";
 import { canSee } from "./scope";
-import { suggestTechnicians } from "./assignment";
+import { queueAssignment, suggestTechnicians } from "./assignment";
 import { notifyComplaint, queueWebhook } from "./notify";
 import { notifyWhatsAppEvent } from "./whatsapp";
 import { bookingConflicts, type BookingRow } from "@/lib/duplicates";
 import { ensureAsset, ensureCustomer, findCustomer, relinkAsset } from "./link";
 import { resolveSerial, validateSerial, channelFor } from "@/lib/quality";
 import { normalizePhone } from "@/lib/mask";
-import { labelOf, STATUSES, DEFAULT_SLA_HOURS, ACTIVE_STATUSES } from "@/lib/labels";
+import { labelOf, STATUSES, DEFAULT_SLA_HOURS, ACTIVE_STATUSES, normalizeCustomerName } from "@/lib/labels";
 import { assessSla } from "@/lib/sla";
 import { loadRiskContext } from "./query";
 import { displayPhone } from "@/lib/mask";
@@ -54,6 +54,18 @@ const bookSchema = z.object({
   assignMode: z.enum(["suggest", "manual", "none"]).optional(),
   acknowledgeDuplicate: z.boolean().optional(),
   callBy: z.string().max(80).optional().nullable(),
+  email: z.string().max(120).optional().nullable(),
+  purchaseDate: z.string().max(20).optional().nullable(),
+  portal: z.string().max(80).optional().nullable(),
+  subType: z.string().max(80).optional().nullable(),
+  msedclRequestNo: z.string().max(40).optional().nullable(),
+  msedclStatus: z.string().max(40).optional().nullable(),
+  requestSubtype: z.string().max(80).optional().nullable(),
+  msedclVideoUrl: z.string().max(400).optional().nullable(),
+  tehsilId: z.string().optional().nullable(),
+  cityId: z.string().optional().nullable(),
+  idempotencyKey: z.string().max(80).optional().nullable(),
+  version: z.number().optional(),
 });
 
 export type BookInput = z.infer<typeof bookSchema>;
@@ -73,17 +85,31 @@ function clean(value?: string | null) {
   return text ? text : null;
 }
 
-async function slaHours(companyId: string, callType: string) {
+async function slaPlan(companyId: string, callType: string) {
   const policy = await prisma.slaPolicy.findUnique({ where: { companyId_callType: { companyId, callType } } });
-  return policy?.active === false ? DEFAULT_SLA_HOURS[callType] ?? 72 : policy?.hours ?? DEFAULT_SLA_HOURS[callType] ?? 72;
+  const hours = policy?.active === false ? DEFAULT_SLA_HOURS[callType] ?? 24 : policy?.hours ?? DEFAULT_SLA_HOURS[callType] ?? 24;
+  const callback = policy?.callbackHours ?? 24;
+  return { hours, callback };
 }
 
 export async function createComplaint(user: SessionUser | null, inputRaw: unknown, opts?: { publicForm?: boolean }) {
   const input = bookSchema.parse(inputRaw);
+  try {
+    input.customerName = normalizeCustomerName(input.customerName);
+  } catch (error) {
+    throw new HttpError(400, error instanceof Error ? error.message : "Enter the customer's real name");
+  }
+  const override = clean(input.duplicateOverrideReason);
+  const overrideOk = !input.acknowledgeDuplicate || (user && (user.role === "ADMIN" || user.role === "STATE_HEAD") && (["Different pump at same site", "Customer insists", "Previous ticket closed wrongly"].includes(override ?? "") || (override ?? "").startsWith("Other:")));
+  if (input.acknowledgeDuplicate && !overrideOk) throw new HttpError(403, "Only an admin or state head can override, and the reason must be from the list");
   if (user && !user.caps.book && !opts?.publicForm) throw new HttpError(403, "You cannot book complaints");
   if (user && user.role !== "ADMIN" && !user.companyIds.includes(input.companyId)) throw new HttpError(403, "You cannot book for that company");
   const phone = normalizePhone(input.phone);
-  if (phone.length !== 10) throw new HttpError(400, "Enter a 10-digit mobile number");
+  if (!/^[6-9]\d{9}$/.test(phone)) throw new HttpError(400, "Enter a 10-digit mobile number starting with 6 to 9");
+  if (input.idempotencyKey) {
+    const existingKey = await prisma.complaint.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existingKey) return existingKey;
+  }
   if (!input.natureId && !clean(input.natureText)) throw new HttpError(400, "Choose the nature of the complaint");
 
   const company = await prisma.company.findUnique({ where: { id: input.companyId } });
@@ -93,6 +119,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
   let stateId = clean(input.stateId);
   let areaId = clean(input.areaId);
   const pincode = clean(input.pincode);
+  if (pincode && !/^[1-9]\d{5}$/.test(pincode)) throw new HttpError(400, "Enter a 6-digit pincode");
   if (pincode && !districtId) {
     const pin = await prisma.pincode.findUnique({ where: { code: pincode } });
     if (pin) {
@@ -111,11 +138,12 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     prisma.district.findUnique({ where: { id: districtId } }),
     areaId ? prisma.area.findUnique({ where: { id: areaId } }) : null,
     input.productId ? prisma.product.findUnique({ where: { id: input.productId } }) : null,
-    input.brandId ? prisma.brand.findUnique({ where: { id: input.brandId } }) : prisma.brand.findFirst({ where: { companyId: company.id, name: "OSWAL" } }),
+    input.brandId ? prisma.brand.findUnique({ where: { id: input.brandId } }) : prisma.brand.findFirst({ where: { companyId: company.id, name: { equals: "Oswal", mode: "insensitive" } } }),
     input.natureId ? prisma.complaintIssue.findUnique({ where: { id: input.natureId } }) : null,
     input.categoryId ? prisma.category.findUnique({ where: { id: input.categoryId } }) : null,
   ]);
   if (!state || !district) throw new HttpError(400, "State or district was not found");
+  if (category?.companyCode && category.companyCode !== company.code) throw new HttpError(400, "That product belongs to the other company");
 
   const serial = resolveSerial({ serial: input.serialNo, unavailable: input.serialUnavailable, reason: input.serialUnavailableReason });
   if (!serial.ok) throw new HttpError(400, serial.reason);
@@ -151,8 +179,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
         select: { ticketNo: true, customerName: true },
       })
     : null;
-  const override = clean(input.duplicateOverrideReason);
-  if ((conflicts.blocking.length || conflicts.sameDay.length || otherOwner) && (!input.acknowledgeDuplicate || !override || override.length < 8)) {
+  if ((conflicts.blocking.length || conflicts.sameDay.length || otherOwner) && !input.acknowledgeDuplicate) {
     const reason = otherOwner && !conflicts.reason
       ? `Serial ${serial.serial} is already linked to ${otherOwner.customerName} on ${otherOwner.ticketNo}.`
       : conflicts.reason ?? "A similar complaint already exists";
@@ -163,7 +190,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     });
   }
 
-  const assignMode = input.assignMode ?? "suggest";
+  const assignMode = input.assignMode ?? "none";
   let engineerId = clean(input.engineerId);
   let assignReason: string | null = null;
   if (assignMode === "none") engineerId = null;
@@ -185,7 +212,8 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
   if (engineerId && (!engineer || engineer.companyId !== company.id)) throw new HttpError(400, "Choose a technician from this company");
   if (engineer && !assignReason) assignReason = assignMode === "manual" ? "Chosen by the desk" : "Selected technician";
 
-  const hours = await slaHours(company.id, input.callType);
+  const plan = await slaPlan(company.id, input.callType);
+  const hours = plan.hours;
   const bookDate = new Date();
   const scheduleDate = parseDeskDate(clean(input.scheduleDate));
   const source = opts?.publicForm ? (input.source === "QR" ? "QR" : input.source === "WHATSAPP" ? "WHATSAPP" : "WEB") : user?.role === "DEALER" ? "DEALER" : input.source || "CALL";
@@ -193,7 +221,16 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
   const actorName = user?.name ?? (source === "QR" ? "QR link" : "Web form");
 
   const created = await prisma.$transaction(async (tx) => {
-    const ticketNo = await nextTicketNo(bookDate);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`book:${phone}`}))`;
+    if (serial.serial) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`serial:${serial.serial}`}))`;
+    if (serial.serial && !input.acknowledgeDuplicate) {
+      const openSame = await tx.complaint.findFirst({
+        where: { serialNorm: serial.serial, callType: input.callType, status: { in: ["OPEN", "ASSIGNED", "REASSIGNED", "PENDING"] } },
+        select: { ticketNo: true },
+      });
+      if (openSame) throw new HttpError(409, `Open ticket ${openSame.ticketNo} already covers this serial and call type`);
+    }
+    const ticketNo = await nextTicketNo(bookDate, tx);
     const party = await ensureCustomer(tx, {
       companyId: company.id,
       name: input.customerName,
@@ -270,7 +307,20 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
         msedclConsumerNo: clean(input.msedclConsumerNo),
         msedclSubdivision: clean(input.msedclSubdivision),
         schemeName: clean(input.schemeName),
+        email: clean(input.email),
+        purchaseDate: parseDeskDate(clean(input.purchaseDate)),
+        portal: clean(input.portal),
+        subType: clean(input.subType),
+        msedclRequestNo: clean(input.msedclRequestNo),
+        msedclStatus: clean(input.msedclStatus),
+        requestSubtype: clean(input.requestSubtype),
+        msedclVideoUrl: clean(input.msedclVideoUrl),
+        tehsilId: clean(input.tehsilId),
+        cityId: clean(input.cityId),
+        idempotencyKey: clean(input.idempotencyKey),
+        qaFlag: Boolean(user?.isTest),
         slaDueAt: new Date(bookDate.getTime() + hours * 3600 * 1000),
+        callbackDueAt: new Date(bookDate.getTime() + plan.callback * 3600 * 1000),
         slaHours: hours,
         repeatFlag: conflicts.blocking.length > 0 || Boolean(otherOwner),
         repeatReason: conflicts.reason,
@@ -306,6 +356,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     await bumpVersion(tx);
     return complaint;
   });
+  if (!created.engineerId) await queueAssignment(created.id);
 
   await notifyComplaint({
     event: "BOOKING",
@@ -349,7 +400,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
 }
 
 const actionSchema = z.object({
-  action: z.enum(["assign", "hold", "close", "happy", "cancel", "reopen", "schedule", "priority", "note"]),
+  action: z.enum(["assign", "hold", "close", "happy", "cancel", "reopen", "schedule", "priority", "note", "payment", "video"]),
   engineerId: z.string().optional().nullable(),
   holdReason: z.string().max(240).optional().nullable(),
   problemId: z.string().optional().nullable(),
@@ -366,6 +417,11 @@ const actionSchema = z.object({
   serialNo: z.string().max(60).optional().nullable(),
   missingSerialReason: z.string().max(240).optional().nullable(),
   nameplateCaptured: z.boolean().optional(),
+  version: z.number().optional(),
+  serviceCharge: z.number().optional().nullable(),
+  spareCharge: z.number().optional().nullable(),
+  paymentNote: z.string().max(240).optional().nullable(),
+  msedclVideoUrl: z.string().max(400).optional().nullable(),
 });
 
 export async function getComplaint(user: SessionUser, scope: string, idOrTicket: string) {
@@ -393,12 +449,12 @@ export async function getComplaint(user: SessionUser, scope: string, idOrTicket:
     engineerOpen: row.engineerId ? ctx.loadCounts.get(row.engineerId) ?? 0 : 0,
     historicalHours: ctx.hist[row.callType] ?? null,
   });
-  const family: { customerId?: string; assetId?: string }[] = [];
-  if (row.customerId) family.push({ customerId: row.customerId });
-  if (row.assetId) family.push({ assetId: row.assetId });
+  const family: { serialNorm?: string; productId?: string }[] = [];
+  if (row.serialNorm) family.push({ serialNorm: row.serialNorm });
+  else if (row.productId && row.customerId) family.push({ productId: row.productId });
   const related = family.length
     ? await prisma.complaint.findMany({
-        where: { id: { not: row.id }, OR: family },
+        where: { id: { not: row.id }, customerId: row.customerId ?? undefined, OR: family },
         orderBy: { bookDate: "desc" },
         take: 40,
         include: {
@@ -482,6 +538,7 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
   const input = actionSchema.parse(raw);
   const current = await prisma.complaint.findUnique({ where: { id }, include: { company: true } });
   if (!current || !canSee(user, scope, current)) throw new HttpError(404, "Complaint not found");
+  if (input.version != null && input.version !== current.version) throw new HttpError(409, "This complaint was updated in another tab. Reload it.");
   const now = new Date();
   const data: Record<string, unknown> = {};
   let type = input.action.toUpperCase();
@@ -572,6 +629,7 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     data.happyRating = input.rating;
     data.happyRemarks = clean(input.remarks);
     data.happyAt = now;
+    data.feedbackPending = false;
     message = `Happy calling done, ${input.rating}/5`;
     notifyEvent = "FEEDBACK";
   } else if (input.action === "cancel") {
@@ -605,6 +663,19 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
       complaintId: current.id,
       vars: { ticketNo: current.ticketNo, customerName: current.customerName, scheduleDate: formatDay(input.scheduleDate), engineer: current.assignedName ?? "", engineerPhone: "", link: "", otp: "" },
     });
+  } else if (input.action === "payment") {
+    if (!user.caps.note && !user.caps.close) throw new HttpError(403, "You cannot record a payment");
+    data.serviceCharge = input.serviceCharge ?? null;
+    data.spareCharge = input.spareCharge ?? null;
+    data.paymentNote = clean(input.paymentNote);
+    data.paidAt = new Date();
+    message = "Payment recorded";
+    type = "NOTE";
+  } else if (input.action === "video") {
+    if (!user.caps.note && !user.caps.close) throw new HttpError(403, "You cannot add a video");
+    data.msedclVideoUrl = clean(input.msedclVideoUrl);
+    message = "MSEDCL video saved";
+    type = "NOTE";
   } else if (input.action === "priority") {
     if (!user.caps.assign && user.role !== "ADMIN") throw new HttpError(403, "You cannot change priority");
     if (!input.priority) throw new HttpError(400, "Choose a priority");
@@ -613,8 +684,9 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     type = "PRIORITY";
   }
 
+  data.version = { increment: 1 };
   const updated = await prisma.$transaction(async (tx) => {
-    const complaint = await tx.complaint.update({ where: { id: current.id }, data });
+    const complaint = await tx.complaint.update({ where: { id: current.id }, data: data as never });
     await tx.complaintEvent.create({
       data: { complaintId: current.id, actorId: user.id, actorName: user.name, type, message },
     });

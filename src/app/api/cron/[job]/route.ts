@@ -1,5 +1,6 @@
 import { runEscalation, runSummary } from "@/server/jobs";
 import { warmDashboardCache } from "@/server/home";
+import { sweepAssignmentQueue } from "@/server/assignment";
 import { json } from "@/server/http";
 
 export async function POST(req: Request, context: { params: Promise<{ job: string }> }) {
@@ -9,6 +10,6 @@ export async function POST(req: Request, context: { params: Promise<{ job: strin
   const { job } = await context.params;
   if (job === "escalation") return json(await runEscalation({ maxBatches: 8 }));
   if (job === "summary") return json(await runSummary());
-  if (job === "dashboard") return json(await warmDashboardCache());
+  if (job === "dashboard") return json({ ...(await warmDashboardCache()), ...(await sweepAssignmentQueue()) });
   return json({ error: "Unknown job" }, 404);
 }

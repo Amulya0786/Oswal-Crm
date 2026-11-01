@@ -186,16 +186,18 @@ export async function relinkAsset(db: Db, assetId: string) {
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index];
     const prior = index > 0 ? rows[index - 1] : null;
-    const window = prior ? repeatWindowDays(prior.bookDate, row.bookDate) : null;
+    const earlier = Boolean(prior && (prior.bookDate < row.bookDate || (prior.bookDate.getTime() === row.bookDate.getTime() && prior.ticketNo < row.ticketNo)));
+    const link = earlier && prior && ["CLOSED", "HAPPY_CALLING"].includes(prior.status) ? prior : null;
+    const window = link ? repeatWindowDays(link.bookDate, row.bookDate) : null;
     const later = rows.slice(index + 1).map((item) => item.bookDate);
     const closed = row.closedAt && (row.status === "CLOSED" || row.status === "HAPPY_CALLING" || row.status === "CLOSED_UNVERIFIED");
     await db.complaint.update({
       where: { id: row.id },
       data: {
-        repeatOfTicket: prior?.ticketNo ?? null,
+        repeatOfTicket: link?.ticketNo ?? null,
         repeatWindow: window,
         repeatFlag: window != null || Boolean(row.duplicateOfTicket),
-        repeatReason: composeRepeatReason(row.duplicateOfTicket, prior?.ticketNo, window),
+        repeatReason: composeRepeatReason(row.duplicateOfTicket, link?.ticketNo, window),
         firstTimeFix: closed ? isFirstTimeFix({ repeatWindow: window, closedAt: row.closedAt, laterBookDates: later }) : null,
       },
     });
