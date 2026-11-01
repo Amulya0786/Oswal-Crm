@@ -1,15 +1,12 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { saveObject } from "./storage";
 
 export async function storeAudio(complaintId: string, dataUrl: string) {
   const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
   if (!match) throw new Error("Voice note was empty");
   const bytes = Buffer.from(match[2], "base64");
   if (bytes.length > 2_000_000) throw new Error("Voice note is larger than 2 MB");
-  const dir = process.env.STORAGE_DIR || path.join(process.cwd(), "data", "uploads");
-  await mkdir(dir, { recursive: true });
-  const file = `${complaintId}-voice-${Date.now()}.webm`;
-  await writeFile(path.join(dir, file), bytes);
+  const file = `uploads/${complaintId}-voice-${Date.now()}.webm`;
+  await saveObject(file, bytes, match[1] || "audio/webm");
   return file;
 }
 

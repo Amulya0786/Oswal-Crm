@@ -1,4 +1,4 @@
-import { getScope } from "@/server/auth";
+import { getScope, rejectTemporaryPassword } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
 import { checkIn, earnings, fieldClose, issueCloseOtp, punch, todayVisits } from "@/server/field";
 import { updateComplaint } from "@/server/complaints";
@@ -13,6 +13,7 @@ export async function GET(_req: Request, context: { params: Promise<{ slug: stri
   try {
     const user = await actor();
     if (!user) return json({ error: "Sign in" }, 401);
+    rejectTemporaryPassword(user);
     const { slug } = await context.params;
     if (slug[0] === "today") return json({ visits: await todayVisits(user) });
     if (slug[0] === "earnings") return json(await earnings(user));
@@ -33,6 +34,7 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
   try {
     const user = await actor();
     if (!user) return json({ error: "Sign in" }, 401);
+    rejectTemporaryPassword(user);
     const { slug } = await context.params;
     const body = await readJson(req);
     if (slug[0] === "checkin") return json(await checkIn(user, String(body.complaintId), body.kind === "ARRIVE" ? "ARRIVE" : "START", body.lat, body.lng));

@@ -49,6 +49,7 @@ export type SessionUser = {
   role: Role;
   phone: string | null;
   isTest: boolean;
+  mustChangePassword: boolean;
   engineerId: string | null;
   companies: CompanyBrief[];
   companyIds: string[];

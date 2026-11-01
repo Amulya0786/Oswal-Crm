@@ -1,0 +1,9 @@
+.env
+.env.*
+.git
+.next
+node_modules
+data
+mobile
+coverage
+*.md

@@ -1,5 +1,5 @@
 import { createWriteStream } from "fs";
-import { mkdir } from "fs/promises";
+import { mkdir, readFile } from "fs/promises";
 import path from "path";
 import { once } from "events";
 import { Prisma } from "@prisma/client";
@@ -10,6 +10,7 @@ import type { ComplaintFilters, SessionUser } from "@/lib/types";
 import { csvCell } from "@/lib/csv";
 import { labelOf, STATUSES, CALL_TYPES } from "@/lib/labels";
 import { formatDay } from "@/lib/time";
+import { localFile, saveObject, spacesConfigured } from "./storage";
 
 const HEADERS = ["Comp. No", "Book date", "Customer", "Mobile", "Address", "Area", "District", "State", "Pincode", "Call type", "Category", "Product", "Nature", "Schedule date", "Assigned to", "Status", "Saral Id", "OEM / brand", "Priority", "Call by", "Final status", "Scheme", "MSEDCL consumer", "Company", "Ageing"];
 
@@ -43,10 +44,10 @@ export async function runExport(id: string) {
     const session = toSessionUser(user);
     const ctx = await loadRiskContext();
     const where = Prisma.sql`${scopeSql(session, params.scope)} AND ${filterSql(params.filters, ctx)}`;
-    const folder = path.join(process.cwd(), "data", "exports");
-    await mkdir(folder, { recursive: true });
     const fileName = `complaints-${id.slice(-6)}.csv`;
-    const filePath = path.join(folder, fileName);
+    const key = `exports/${fileName}`;
+    const filePath = localFile(key);
+    await mkdir(path.dirname(filePath), { recursive: true });
     const stream = createWriteStream(filePath);
     stream.write(`${HEADERS.join(",")}\n`);
     let cursorId: string | null = null;
@@ -84,7 +85,8 @@ export async function runExport(id: string) {
     }
     stream.end();
     await once(stream, "finish");
-    await prisma.exportJob.update({ where: { id }, data: { status: "DONE", filePath, fileName, rowCount: count, finishedAt: new Date() } });
+    if (spacesConfigured()) await saveObject(key, await readFile(filePath), "text/csv");
+    await prisma.exportJob.update({ where: { id }, data: { status: "DONE", filePath: key, fileName, rowCount: count, finishedAt: new Date() } });
   } catch (error) {
     await prisma.exportJob.update({
       where: { id },

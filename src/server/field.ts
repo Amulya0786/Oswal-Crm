@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { saveObject } from "./storage";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 import { updateComplaint } from "./complaints";
@@ -55,10 +54,8 @@ export async function saveMedia(complaintId: string, kind: string, dataUrl: stri
   const bytes = Buffer.from(match[2], "base64");
   if (bytes.length > 1_500_000) throw new HttpError(400, "Photo is larger than 1.5 MB");
   const ext = match[1].includes("png") ? "png" : "jpg";
-  const dir = path.join(process.cwd(), "data", "uploads");
-  await mkdir(dir, { recursive: true });
-  const file = `${complaintId}-${kind}-${Date.now()}.${ext}`;
-  await writeFile(path.join(dir, file), bytes);
+  const file = `uploads/${complaintId}-${kind}-${Date.now()}.${ext}`;
+  await saveObject(file, bytes, match[1]);
   await prisma.fieldMedia.create({ data: { complaintId, kind, path: file, note: note ?? null } });
 }
 

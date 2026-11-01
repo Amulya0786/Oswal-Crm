@@ -1,6 +1,5 @@
-import { mkdir, writeFile, readFile } from "fs/promises";
-import path from "path";
-import { getScope } from "@/server/auth";
+import { loadObject, saveObject, signedObjectUrl } from "@/server/storage";
+import { getScope, rejectTemporaryPassword } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
 import { prisma, getVersion } from "@/server/db";
 import { createComplaint, updateComplaint, bulkUpdate, getComplaint } from "@/server/complaints";
@@ -64,6 +63,7 @@ async function route(method: string, slug: string[], req: Request) {
   const url = new URL(req.url);
   const session = await actor();
   if (!session) return json({ error: "Sign in" }, 401);
+  rejectTemporaryPassword(session.user);
   const { user, scope } = session;
   const [head, id, extra] = slug;
 
@@ -364,7 +364,9 @@ async function route(method: string, slug: string[], req: Request) {
     const job = await prisma.exportJob.findUnique({ where: { id } });
     if (!job || !job.filePath || job.status !== "DONE") return json({ error: "Not ready" }, 404);
     if (job.userId !== user.id && !user.caps.security) return json({ error: "Not your export" }, 403);
-    const bytes = await readFile(job.filePath);
+    const signed = await signedObjectUrl(job.filePath, { filename: job.fileName ?? "export.csv", contentType: "text/csv" });
+    if (signed) return Response.redirect(signed, 302);
+    const bytes = await loadObject(job.filePath);
     return new Response(bytes, { headers: { "Content-Type": "text/csv", "Content-Disposition": `attachment; filename="${job.fileName ?? "export.csv"}"` } });
   }
 
@@ -376,10 +378,8 @@ async function route(method: string, slug: string[], req: Request) {
     if (file.size > 5_000_000) return json({ error: "Files must be under 5 MB" }, 400);
     const complaint = await getComplaint(user, scope, complaintId);
     if (!complaint) return json({ error: "Complaint not found" }, 404);
-    const folder = path.join(process.cwd(), "data", "uploads");
-    await mkdir(folder, { recursive: true });
-    const stored = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "")}`;
-    await writeFile(path.join(folder, stored), Buffer.from(await file.arrayBuffer()));
+    const stored = `uploads/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "")}`;
+    await saveObject(stored, Buffer.from(await file.arrayBuffer()), file.type || "application/octet-stream");
     const attachment = await prisma.attachment.create({
       data: { complaintId: complaint.id, fileName: file.name, mime: file.type, size: file.size, path: stored, uploadedBy: user.id },
     });
@@ -391,7 +391,10 @@ async function route(method: string, slug: string[], req: Request) {
     if (!attachment) return json({ error: "Not found" }, 404);
     const { canSee } = await import("@/server/scope");
     if (!canSee(user, scope, attachment.complaint)) return json({ error: "Not found" }, 404);
-    const bytes = await readFile(path.join(process.cwd(), "data", "uploads", attachment.path));
+    const key = attachment.path.includes("/") ? attachment.path : `uploads/${attachment.path}`;
+    const signed = await signedObjectUrl(key, { filename: attachment.fileName, contentType: attachment.mime || "application/octet-stream" });
+    if (signed) return Response.redirect(signed, 302);
+    const bytes = await loadObject(key);
     return new Response(bytes, {
       headers: {
         "Content-Type": attachment.mime || "application/octet-stream",

@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   eslint: { ignoreDuringBuilds: true },
-  serverExternalPackages: ["bcryptjs", "exceljs"],
+  serverExternalPackages: ["bcryptjs", "exceljs", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
 };
 
 export default nextConfig;

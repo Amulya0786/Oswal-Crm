@@ -18,6 +18,7 @@ import { formatDay } from "@/lib/time";
 import type { SessionUser } from "@/lib/types";
 import { parseTicketNo } from "@/lib/ticket";
 import { issueTrackToken } from "@/lib/report-key";
+import { publicOrigin } from "@/lib/origin";
 
 const active = new Set<string>(ACTIVE_STATUSES);
 
@@ -329,7 +330,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     engineer: created.assignedName ?? "",
     engineerPhone: engineer?.phone ?? "",
     scheduleDate: created.scheduleDate ? formatDay(created.scheduleDate) : "soon",
-    link: `${process.env.APP_URL ?? "http://localhost:3000"}/track/${created.trackToken ?? created.ticketNo}`,
+    link: `${publicOrigin()}/track/${created.trackToken ?? created.ticketNo}`,
     otp: "",
   };
   await notifyWhatsAppEvent("REGISTERED", { phone: created.phone, companyId: company.id, complaintId: created.id, vars });

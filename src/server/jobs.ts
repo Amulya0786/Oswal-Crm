@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { saveObject } from "./storage";
 import { prisma, bumpVersion } from "./db";
 import { loadRiskContext } from "./query";
 import { riskPredicate, ACTIVE } from "./scope";
@@ -8,6 +7,7 @@ import { matchesRule, parseRule, type RuleDefinition } from "@/lib/rules";
 import { notifyComplaint, deliver } from "./notify";
 import { textPdf } from "@/lib/pdf";
 import { kolkataTodayStart, midnightShift, formatDay } from "@/lib/time";
+import { publicOrigin } from "@/lib/origin";
 
 type LadderUser = { id: string; name: string; role: string };
 
@@ -266,13 +266,11 @@ export async function runSummary(now = new Date()) {
   if (techs.length) lines.push(`Technicians: ${techs.map((row) => `${row.label} ${row.n}`).join(", ")}`);
   else lines.push("Technicians: none");
   lines.push(`Repeat failures: ${repeats}`);
-  const origin = process.env.APP_URL ?? "http://localhost:3000";
+  const origin = publicOrigin();
   const html = `<article style="font-family:Inter,Arial,sans-serif;color:#242424"><div style="background:#02502f;padding:16px 20px"><img src="${origin}/brand/pumps-logo.png" alt="Oswal" height="64" /></div><h1>Oswal daily summary</h1><ul>${lines.slice(1).map((line) => `<li>${line}</li>`).join("")}</ul></article>`;
   const pdf = textPdf("Oswal daily summary", lines);
-  const dir = path.join(process.cwd(), "data", "summaries");
-  await mkdir(dir, { recursive: true });
-  const file = path.join(dir, `summary-${formatDay(start).replace(/\s/g, "-")}.pdf`);
-  await writeFile(file, pdf);
+  const file = `summaries/summary-${formatDay(start).replace(/\s/g, "-")}.pdf`;
+  await saveObject(file, pdf, "application/pdf");
   await prisma.appSetting.upsert({
     where: { key: "lastSummary" },
     create: { key: "lastSummary", value: JSON.stringify({ html, file, at: now.toISOString(), lines }) },

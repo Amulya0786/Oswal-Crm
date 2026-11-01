@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { BrandLogo } from "@/components/chrome";
 
+const showDemo = process.env.NEXT_PUBLIC_DEMO_HINTS !== "0";
 const DEMOS = [["Admin", "admin@oswal.test", "Admin@123"]];
 
 export default function LoginPage() {
@@ -22,6 +23,11 @@ export default function LoginPage() {
       setError(body.error ?? "Could not sign in");
       return;
     }
+    const body = await response.json();
+    if (body.mustChangePassword) {
+      window.location.href = "/password";
+      return;
+    }
     const next = new URLSearchParams(window.location.search).get("next") || "/";
     window.location.href = next;
   }
@@ -36,11 +42,11 @@ export default function LoginPage() {
           <p className="kicker">Oswal Pumps · Oswal Solar</p>
           <h2>Service desk</h2>
           <p className="muted">Book, assign and close a call. Karnal · Haryana.</p>
-          <label className="stack">Email<input name="email" type="email" autoComplete="username" required defaultValue="admin@oswal.test" /></label>
-          <label className="stack">Password<input name="password" type="password" autoComplete="current-password" required defaultValue="Admin@123" /></label>
+          <label className="stack">Email<input name="email" type="email" autoComplete="username" required defaultValue={showDemo ? "admin@oswal.test" : ""} /></label>
+          <label className="stack">Password<input name="password" type="password" autoComplete="current-password" required defaultValue={showDemo ? "Admin@123" : ""} /></label>
           {error && <div className="banner bad">{error}</div>}
           <button className="btn" disabled={pending}>{pending ? "Signing in…" : "Enter the desk"}</button>
-          {process.env.NEXT_PUBLIC_DEMO_HINTS !== "0" && (
+          {showDemo && (
             <table>
               <tbody>
                 {DEMOS.map((row) => (

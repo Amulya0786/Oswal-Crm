@@ -1,5 +1,6 @@
 import { createHmac } from "crypto";
 import { prisma } from "./db";
+import { publicOrigin } from "@/lib/origin";
 
 type Outbound = {
   channel: "WHATSAPP" | "SMS" | "EMAIL";
@@ -69,7 +70,7 @@ export async function deliver(msg: Outbound) {
     return { provider: "external", status: "FAILED", detail: error instanceof Error ? error.message : "send failed" };
   }
   if (msg.channel === "EMAIL") {
-    const origin = process.env.APP_URL ?? "http://localhost:3000";
+    const origin = publicOrigin();
     const safe = msg.body.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char] ?? char));
     const html = `<div style="font-family:Inter,Arial,sans-serif;color:#242424"><div style="background:#02502f;padding:16px 20px"><img src="${origin}/brand/pumps-logo.png" alt="Oswal" height="64" /></div><div style="padding:16px 20px"><h1 style="font-size:18px">${msg.subject ?? "Oswal"}</h1><p style="white-space:pre-wrap">${safe}</p></div></div>`;
     console.log(`[notify:EMAIL] -> ${msg.to} | ${html}`);
@@ -103,7 +104,7 @@ export async function notifyComplaint(input: {
           subject: input.event,
           body: DEFAULT_BODY[input.event] ?? DEFAULT_BODY.BOOKING,
         }));
-    const link = `${process.env.APP_URL ?? "http://localhost:3000"}/track?ticket=${input.ticketNo}`;
+    const link = `${publicOrigin()}/track?ticket=${input.ticketNo}`;
     const vars = {
       companyName: input.companyName,
       ticketNo: input.ticketNo,

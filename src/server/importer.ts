@@ -1,4 +1,3 @@
-import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
 import ExcelJS from "exceljs";
 import { prisma, bumpVersion } from "./db";
@@ -15,16 +14,13 @@ import { parseLooseDate } from "@/lib/time";
 import { IMPORT_BATCH, classifyHistoryDate, closedHistory, resolveHistoryCutoff, tallyHistory } from "@/lib/import-cutoff";
 import type { SessionUser } from "@/lib/types";
 import bcrypt from "bcryptjs";
-
-const dir = () => path.join(process.cwd(), "data", "imports");
+import { loadObject, saveObject } from "./storage";
 
 export async function previewImport(fileName: string, bytes: Buffer) {
-  await mkdir(dir(), { recursive: true });
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const stored = path.join(dir(), token);
-  await writeFile(stored, bytes);
-  await writeFile(`${stored}.name`, fileName);
-  const table = await readTable(stored, fileName);
+  await saveObject(`imports/${token}`, bytes, "application/octet-stream");
+  await saveObject(`imports/${token}.name`, Buffer.from(fileName), "text/plain");
+  const table = await readTableBytes(bytes, fileName);
   if (table.rows.length > 100000) throw new HttpError(400, "This file has more than 100,000 rows.");
   const mapping = suggestMapping(table.headers);
   const cutoff = resolveHistoryCutoff(undefined, process.env.IMPORT_CUTOFF);
@@ -49,13 +45,10 @@ export async function previewImport(fileName: string, bytes: Buffer) {
   };
 }
 
-async function readTable(file: string, fileName: string) {
-  if (fileName.toLowerCase().endsWith(".csv")) {
-    const text = await readFile(file, "utf8");
-    return parseCsv(text);
-  }
+async function readTableBytes(bytes: Buffer, fileName: string) {
+  if (fileName.toLowerCase().endsWith(".csv")) return parseCsv(bytes.toString("utf8"));
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(file);
+  await workbook.xlsx.load(bytes as unknown as ExcelJS.Buffer);
   const sheet = workbook.worksheets[0];
   if (!sheet) return { headers: [] as string[], rows: [] as Record<string, string>[] };
   const headers: string[] = [];
@@ -88,9 +81,9 @@ function mapped(row: Record<string, string>, mapping: Record<string, string>) {
 
 export async function commitImport(user: SessionUser, input: { token: string; entity: string; mapping: Record<string, string>; companyId?: string; cutoff?: string }) {
   if (!user.caps.import) throw new HttpError(403, "You cannot import");
-  const file = path.join(dir(), path.basename(input.token));
-  const fileName = await readFile(`${file}.name`, "utf8").catch(() => "upload.csv");
-  const table = await readTable(file, fileName);
+  const token = path.basename(input.token);
+  const fileName = await loadObject(`imports/${token}.name`).then((bytes) => bytes.toString("utf8")).catch(() => "upload.csv");
+  const table = await readTableBytes(await loadObject(`imports/${token}`), fileName);
   const rows = table.rows.map((row) => mapped(row, input.mapping));
   if (input.entity === "complaints") return importComplaints(user, rows, input.companyId, resolveHistoryCutoff(input.cutoff, process.env.IMPORT_CUTOFF));
   if (input.entity === "customers") return importCustomers(rows, input.companyId);

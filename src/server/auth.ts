@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 import type { Capabilities, CompanyBrief, Role, SessionUser } from "@/lib/types";
 import { ROLES } from "@/lib/types";
+import { HttpError } from "./http";
 
 const ROLE_SET = new Set<string>(ROLES);
 
@@ -39,6 +40,7 @@ type UserRow = {
   phone: string | null;
   engineerId: string | null;
   isTest: boolean;
+  mustChangePassword: boolean;
   active: boolean;
   memberships: { company: CompanyBrief }[];
   states: { stateId: string }[];
@@ -55,6 +57,7 @@ export function toSessionUser(user: UserRow): SessionUser {
     role,
     phone: user.phone,
     isTest: user.isTest,
+    mustChangePassword: user.mustChangePassword,
     engineerId: user.engineerId,
     companies: user.memberships.map((row) => row.company),
     companyIds: user.memberships.map((row) => row.company.id),
@@ -86,7 +89,12 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/password");
   return user;
+}
+
+export function rejectTemporaryPassword(user: { mustChangePassword: boolean }) {
+  if (user.mustChangePassword) throw new HttpError(403, "Change your password before using the desk");
 }
 
 export const getScope = cache(async () => {
