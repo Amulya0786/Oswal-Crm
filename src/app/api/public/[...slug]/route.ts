@@ -5,6 +5,7 @@ import { normalizePhone } from "@/lib/mask";
 import { labelOf, STATUSES, CALL_TYPES } from "@/lib/labels";
 import { allowPublicAttempt, checkCaptcha, issueCaptcha } from "@/lib/phase2";
 import { handleWhatsAppWebhook } from "@/server/whatsapp";
+import { saveMedia } from "@/server/field";
 
 const attempts = new Map<string, number[]>();
 const secret = () => process.env.AUTH_SECRET || "dev";
@@ -104,6 +105,7 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
         districtId = district?.id ?? null;
       }
       const hasSerial = String(body.serialNo ?? "").trim().length > 0;
+      const photos = Array.isArray(body.photos) ? body.photos.slice(0, 3) : [];
       const created = await createComplaint(null, {
         ...body,
         districtId,
@@ -113,6 +115,9 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
         serialUnavailable: !hasSerial,
         serialUnavailableReason: hasSerial ? null : (body.serialUnavailableReason || "STICKER_MISSING"),
       }, { publicForm: true });
+      for (const photo of photos) {
+        if (typeof photo === "string") await saveMedia(created.id, "BEFORE", photo, "Website form");
+      }
       return json({ ticketNo: created.ticketNo, id: created.id });
     }
     return json({ error: "Not found" }, 404);

@@ -36,11 +36,18 @@ export default function PublicBookPage() {
       <form className="stack" onSubmit={async (event) => {
         event.preventDefault();
         setError("");
-        const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+        const form = event.currentTarget;
+        const data = Object.fromEntries(new FormData(form).entries());
+        const files = [...(form.querySelector("input[name=photos]") as HTMLInputElement).files ?? []].slice(0, 3);
+        const photos = await Promise.all(files.filter((file) => file.size <= 1_200_000).map((file) => new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.readAsDataURL(file);
+        })));
         const response = await fetch("/api/public/book", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...data, companyId, product: data.product, problem: data.problem, natureText: data.problem, callType: "BREAKDOWN", captchaToken: captcha?.token }),
+          body: JSON.stringify({ ...data, photos, companyId, product: data.product, problem: data.problem, natureText: data.problem, callType: "BREAKDOWN", captchaToken: captcha?.token }),
         });
         const body = await response.json();
         if (!response.ok) setError(body.error ?? "Could not book");

@@ -47,7 +47,7 @@ export async function checkIn(user: SessionUser, complaintId: string, kind: "STA
   return { ok: true };
 }
 
-async function saveMedia(complaintId: string, kind: string, dataUrl: string | null | undefined, note?: string | null) {
+export async function saveMedia(complaintId: string, kind: string, dataUrl: string | null | undefined, note?: string | null) {
   if (!dataUrl) return;
   const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
   if (!match) return;
