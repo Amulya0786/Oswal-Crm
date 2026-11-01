@@ -4,6 +4,8 @@ import { homeSnapshot } from "@/server/home";
 import { prisma } from "@/server/db";
 import { formatNumber } from "@/lib/time";
 import { ImportBanner } from "@/components/import-banner";
+import { cookies } from "next/headers";
+import { phrase } from "@/lib/desk-copy";
 
 export const metadata = { title: "Dashboard" };
 
@@ -24,6 +26,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     ? await prisma.state.findMany({ orderBy: { name: "asc" }, select: { name: true } })
     : [];
   const data = await homeSnapshot(user, scope, view === "state" ? stateName || null : null);
+  const lang = (await cookies()).get("oswal_lang")?.value === "hi" ? "hi" : "en";
+  const t = (text: string) => phrase(lang, text);
   const max = Math.max(...data.places.map((row) => row.open), 1);
   const trendMax = Math.max(...data.trend.map((row) => row.booked), 1);
   return (
@@ -31,7 +35,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <ImportBanner />
       <div className="page-head">
         <div>
-          <h1>{view === "desk" ? "Call centre" : view === "oem" ? "Brand desk" : view === "state" ? "State" : "All India"}</h1>
+          <h1>{t(view === "desk" ? "Call centre" : view === "oem" ? "Brand desk" : view === "state" ? "State" : "All India")}</h1>
           <p className="muted">Updated {new Date(data.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })}</p>
         </div>
         <div className="filters">

@@ -1090,6 +1090,7 @@ model ExpenseClaim {
   type        String
   amount      Float
   detail      String?
+  billPath    String?
   at          DateTime @default(now())
   status      String   @default("SUBMITTED")
   engineer    Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
@@ -1103,6 +1104,7 @@ model ServiceContract {
   customerId  String?
   assetId     String?
   productName String?
+  visitsIncluded Int?
   start       DateTime
   end         DateTime
   status      String    @default("ACTIVE")

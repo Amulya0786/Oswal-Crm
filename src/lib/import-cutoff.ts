@@ -32,6 +32,18 @@ export function tallyHistory(dates: unknown[], cutoff: Date) {
   return tally;
 }
 
+/**
+ * SmartLogics pending export: "Pending" is an open complaint, "Assigned" is assigned,
+ * and "Job on Hold" is the desk's Pending status. Other values stay on the closed-history rules.
+ */
+export function openImportStatus(statusText: string | null | undefined) {
+  const raw = (statusText ?? "").trim().toLowerCase().replace(/[_]+/g, " ").replace(/\s+/g, " ");
+  if (raw === "pending") return { status: "OPEN", closed: false, happy: false };
+  if (raw === "assigned") return { status: "ASSIGNED", closed: false, happy: false };
+  if (raw === "job on hold" || raw === "on hold") return { status: "PENDING", closed: false, happy: false };
+  return closedHistory(statusText);
+}
+
 /** Closed and Happy Calling Done are both finished history, not live calls. */
 export function closedHistory(statusText: string | null | undefined) {
   const normalised = normalizeStatus(statusText);

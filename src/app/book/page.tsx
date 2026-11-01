@@ -14,8 +14,11 @@ const COPY = {
     otp: "Mobile code",
     send: "Send code",
     sent: "Code sent",
+    state: "State",
     district: "District",
     pin: "Pincode",
+    helpline: "Helpline",
+    progress: "Uploading",
     product: "Product",
     problem: "What is the problem?",
     serial: "Serial number, if you can see it",
@@ -33,8 +36,11 @@ const COPY = {
     otp: "मोबाइल कोड",
     send: "कोड भेजें",
     sent: "कोड भेज दिया",
+    state: "राज्य",
     district: "जिला",
     pin: "पिनकोड",
+    helpline: "हेल्पलाइन",
+    progress: "भेज रहे हैं",
     product: "उत्पाद",
     problem: "समस्या क्या है?",
     serial: "सीरियल नंबर, अगर दिखे",
@@ -55,10 +61,22 @@ export default function PublicBookPage() {
   const [error, setError] = useState("");
   const [otpSent, setOtpSent] = useState("");
   const [again, setAgain] = useState(false);
+  const [states, setStates] = useState<{ id: string; name: string }[]>([]);
+  const [stateId, setStateId] = useState("");
+  const [districtQuery, setDistrictQuery] = useState("");
+  const [districtHits, setDistrictHits] = useState<{ id: string; label: string }[]>([]);
+  const [helpline, setHelpline] = useState("");
+  const [progress, setProgress] = useState(0);
   const t = COPY[lang];
   useEffect(() => {
     fetch("/api/public/captcha").then(async (response) => {
       if (response.ok) setCaptcha(await response.json());
+    }).catch(() => null);
+    fetch("/api/public/places?kind=states").then(async (response) => {
+      if (response.ok) setStates((await response.json()).rows ?? []);
+    }).catch(() => null);
+    fetch("/api/public/helpline").then(async (response) => {
+      if (response.ok) setHelpline((await response.json()).helpline ?? "");
     }).catch(() => null);
   }, []);
   return (
@@ -83,12 +101,24 @@ export default function PublicBookPage() {
           return;
         }
         const files = [...(form.querySelector("input[name=photos]") as HTMLInputElement).files ?? []].slice(0, 3);
-        const photos = await Promise.all(files.map(async (file) => fileToDataUrl(await compressImage(file))));
-        const response = await fetch("/api/public/book", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...data, phone, photos, sameIssueAgain: again, product: data.product }),
+        const photos: string[] = [];
+        for (let index = 0; index < files.length; index += 1) {
+          setProgress(Math.round(((index + 1) / Math.max(files.length, 1)) * 60));
+          photos.push(await fileToDataUrl(await compressImage(files[index])));
+        }
+        const payload = JSON.stringify({ ...data, phone, photos, sameIssueAgain: again, product: data.product, stateName: states.find((item) => item.id === stateId)?.name });
+        const response = await new Promise<Response>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/public/book");
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) setProgress(60 + Math.round((event.loaded / event.total) * 40));
+          };
+          xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }));
+          xhr.onerror = () => reject(new Error("upload"));
+          xhr.send(payload);
         });
+        setProgress(0);
         const body = await response.json().catch(() => ({ error: "Could not save, please retry" }));
         if (response.status === 409) {
           setAgain(true);
@@ -116,14 +146,39 @@ export default function PublicBookPage() {
         }}>{t.send}</button>
         {otpSent && <p>{otpSent}</p>}
         <label className="stack">{t.otp} <span className="req">*</span><input name="otp" inputMode="numeric" maxLength={6} required /></label>
-        <label className="stack">{t.district}<input name="districtName" required /></label>
-        <label className="stack">{t.pin} <span className="req">*</span><input name="pincode" inputMode="numeric" maxLength={6} pattern="[1-9][0-9]{5}" required /></label>
+        <label className="stack">{t.state} <span className="req">*</span>
+          <select name="stateId" required value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictQuery(""); }}>
+            <option value="">{t.state}</option>
+            {states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
+          </select>
+        </label>
+        <label className="stack">{t.pin} <span className="req">*</span><input name="pincode" inputMode="numeric" maxLength={6} pattern="[1-9][0-9]{5}" required onChange={async (event) => {
+          const value = event.target.value.replace(/\D/g, "").slice(0, 6);
+          event.target.value = value;
+          if (!/^[1-9]\d{5}$/.test(value)) return;
+          const response = await fetch(`/api/public/places?kind=pin&q=${value}`);
+          const body = await response.json();
+          const hit = body.rows?.[0];
+          if (hit) { setStateId(hit.stateId); setDistrictQuery(hit.district); }
+        }} /></label>
+        <label className="stack">{t.district} <span className="req">*</span>
+          <input name="districtName" required value={districtQuery} onChange={async (event) => {
+            const value = event.target.value;
+            setDistrictQuery(value);
+            if (value.length < 2) return;
+            const response = await fetch(`/api/public/places?kind=district&stateId=${stateId}&q=${encodeURIComponent(value)}`);
+            if (response.ok) setDistrictHits((await response.json()).rows ?? []);
+          }} />
+          {districtHits.map((hit) => <button type="button" key={hit.id} className="chip" onClick={() => { setDistrictQuery(hit.label.split(",")[0].trim()); setDistrictHits([]); }}>{hit.label}</button>)}
+        </label>
         <label className="stack">{t.product}
           <select name="product" required defaultValue="Solar pump">{PRODUCTS.map((item) => <option key={item}>{item}</option>)}</select>
         </label>
         <label className="stack">{t.problem}<textarea name="problem" required /></label>
         <label className="stack">{t.serial}<input name="serialNo" /></label>
-        <label className="stack">{t.photo}<input name="photos" type="file" accept="image/*" multiple /></label>
+        <label className="stack">{t.photo}<input name="photos" type="file" accept="image/*" multiple aria-label={t.photo} /></label>
+        {progress > 0 && <p>{t.progress} {progress}%</p>}
+        {helpline && <p>{t.helpline}: {helpline}</p>}
         <label className="stack">{captcha?.question ?? t.captcha}<input name="captchaAnswer" required /></label>
         <input type="hidden" name="captchaToken" value={captcha?.token ?? ""} />
         <label className="chip"><input type="checkbox" checked={again} onChange={(event) => setAgain(event.target.checked)} /> {t.again}</label>

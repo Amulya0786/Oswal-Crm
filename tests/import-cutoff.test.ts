@@ -6,6 +6,7 @@ import {
   chunkRows,
   classifyHistoryDate,
   closedHistory,
+  openImportStatus,
   resolveHistoryCutoff,
   tallyHistory,
 } from "../src/lib/import-cutoff";
@@ -48,6 +49,9 @@ describe("history cutoff", () => {
     expect(closedHistory("Closed")).toEqual({ status: "CLOSED", closed: true, happy: false });
     expect(closedHistory("Happy Calling Done")).toEqual({ status: "HAPPY_CALLING", closed: true, happy: true });
     expect(closedHistory("Open").closed).toBe(false);
+    expect(openImportStatus("Pending")).toEqual({ status: "OPEN", closed: false, happy: false });
+    expect(openImportStatus("Assigned").status).toBe("ASSIGNED");
+    expect(openImportStatus("Job on Hold").status).toBe("PENDING");
   });
 
   it("maps the Smartlogics export columns and batches the file", () => {
@@ -63,6 +67,13 @@ describe("history cutoff", () => {
     expect(mapping["Actual Problem Found"]).toBe("actualProblem");
     expect(mapping["Solution Provided"]).toBe("actualSolution");
     expect(mapping["Happy Code"]).toBe("happyCode");
+    expect(suggestMapping(["Nature of Work", "Reason Pending", "OEM", "City", "Serial No"])).toMatchObject({
+      "Nature of Work": "natureText",
+      "Reason Pending": "pendingReason",
+      OEM: "brandName",
+      City: "districtName",
+      "Serial No": "serialNo",
+    });
     expect(mapping["Sr.No"]).toBe("ignore");
     expect(mapping["Ageing"]).toBe("ignore");
     expect(chunkRows([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);

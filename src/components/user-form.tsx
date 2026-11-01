@@ -28,10 +28,10 @@ export function UserForm({ companies, states, districts, brands }: { companies: 
     }}>
       <h2>Create user</h2>
       <div className="filters">
-        <input name="name" placeholder="Name" required />
-        <input name="email" type="email" placeholder="Email" required />
-        <input name="password" placeholder="Password" required />
-        <input name="phone" placeholder="Mobile" />
+        <label className="stack">Name<input name="name" aria-label="Name" required /></label>
+        <label className="stack">Email<input name="email" type="email" aria-label="Email" required /></label>
+        <label className="stack">Password<input name="password" type="password" aria-label="Password" required /></label>
+        <label className="stack">Mobile<input name="phone" aria-label="Mobile" /></label>
         <select name="role">{ROLES.filter((role) => role !== "DEALER").map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}</select>
       </div>
       <div className="filters">

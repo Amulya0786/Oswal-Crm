@@ -32,6 +32,29 @@ export async function GET(req: Request, context: { params: Promise<{ slug: strin
     const issued = issueCaptcha(secret());
     return json({ token: issued.token, question: issued.question });
   }
+  if (slug[0] === "places") {
+    const url = new URL(req.url);
+    const kind = url.searchParams.get("kind") ?? "states";
+    const q = (url.searchParams.get("q") ?? "").trim();
+    if (kind === "states") {
+      const states = await prisma.state.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+      return json({ rows: states });
+    }
+    if (kind === "pin" && /^[1-9]\d{5}$/.test(q)) {
+      const pin = await prisma.pincode.findUnique({ where: { code: q }, include: { district: { include: { state: true } } } });
+      return json({ rows: pin ? [{ code: pin.code, districtId: pin.districtId, district: pin.district.name, stateId: pin.district.stateId, state: pin.district.state.name }] : [] });
+    }
+    if (kind === "district") {
+      const rows = await prisma.district.findMany({
+        where: { active: true, ...(url.searchParams.get("stateId") ? { stateId: url.searchParams.get("stateId")! } : {}), ...(q ? { name: { contains: q, mode: "insensitive" } } : {}) },
+        include: { state: true },
+        orderBy: { name: "asc" },
+        take: 20,
+      });
+      return json({ rows: rows.map((row) => ({ id: row.id, label: `${row.name}, ${row.state.name}`, stateId: row.stateId })) });
+    }
+    return json({ rows: [] });
+  }
   if (slug[0] === "helpline") {
     const row = await prisma.appSetting.findUnique({ where: { key: "HELPLINE" } });
     return json({ helpline: row?.value || process.env.HELPLINE || "" });
@@ -148,7 +171,12 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
       await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { used: true } });
       let districtId = body.districtId || null;
       if (!districtId && body.districtName) {
-        const district = await prisma.district.findFirst({ where: { name: { equals: String(body.districtName), mode: "insensitive" } } });
+        const state = body.stateName
+          ? await prisma.state.findFirst({ where: { name: { equals: String(body.stateName), mode: "insensitive" } } })
+          : null;
+        const district = await prisma.district.findFirst({
+          where: { name: { equals: String(body.districtName), mode: "insensitive" }, ...(state ? { stateId: state.id } : {}) },
+        });
         districtId = district?.id ?? null;
       }
       const code = companyCodeForCategory(String(body.product || body.productDetails || ""));

@@ -78,6 +78,17 @@ export async function release3(method: string, head: string, id: string | undefi
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
     return json(await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null));
   }
+  if (head === "engineers" && method === "POST" && id === "signature") {
+    if (!admin(user)) return json({ error: "Admins only" }, 403);
+    const form = await req.formData();
+    const engineerId = String(form.get("engineerId") ?? "");
+    const file = form.get("file");
+    if (!(file instanceof File) || !engineerId) return json({ error: "Choose a signature" }, 400);
+    const { saveObject } = await import("./storage");
+    const saved = await saveObject(`signatures/${engineerId}`, Buffer.from(await file.arrayBuffer()), file.type || "image/png");
+    await prisma.engineer.update({ where: { id: engineerId }, data: { signaturePath: saved } });
+    return json({ ok: true, path: saved });
+  }
   if (head === "engineers" && method === "POST" && id && extraState(url)) {
     if (!admin(user)) return json({ error: "Admins only" }, 403);
     const body = await readJson(req);
@@ -105,10 +116,29 @@ export async function release3(method: string, head: string, id: string | undefi
     const summary = await prisma.expenseClaim.groupBy({ by: ["type"], _sum: { amount: true } });
     return json({ rows, summary });
   }
+  if (head === "expenses" && method === "POST" && id === "bill") {
+    const form = await req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) return json({ error: "Choose a bill photo" }, 400);
+    const { saveObject } = await import("./storage");
+    const saved = await saveObject(`expenses/${user.id}-${Date.now()}`, Buffer.from(await file.arrayBuffer()), file.type || "image/jpeg");
+    return json({ path: saved });
+  }
   if (head === "expenses" && method === "POST") {
     const body = await readJson(req);
+    if (body.id && user.caps.assign) {
+      await prisma.expenseClaim.update({ where: { id: String(body.id) }, data: { status: body.status === "REJECTED" ? "REJECTED" : "APPROVED" } });
+      return json({ ok: true });
+    }
     const row = await prisma.expenseClaim.create({
-      data: { engineerId: String(body.engineerId || user.engineerId), complaintId: body.complaintId ? String(body.complaintId) : null, type: String(body.type ?? "TA"), amount: Number(body.amount) || 0, detail: body.detail ? String(body.detail) : null },
+      data: {
+        engineerId: String(body.engineerId || user.engineerId),
+        complaintId: body.complaintId ? String(body.complaintId) : null,
+        type: String(body.type ?? "TA"),
+        amount: Number(body.amount) || 0,
+        detail: body.detail ? String(body.detail) : null,
+        billPath: body.billPath ? String(body.billPath) : null,
+      },
     });
     return json({ row });
   }

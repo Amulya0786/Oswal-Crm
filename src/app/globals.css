@@ -298,6 +298,8 @@ body, button, input, select, textarea { font-size: 13px; }
 .panel, .tile, .table-wrap, .login-card { border-radius: 6px; box-shadow: none; border: 1px solid #e5e7eb; }
 .tile b { font-size: 20px; }
 .req { color: #b91c1c; }
+.topband .search-btn, .topband .icon-btn, .topband summary, .topband .muted { color: #111827; }
+.topband .search-btn { background: #fff; border: 1px solid #d1d5db; }
 .book-page, .public-book, main { padding: 16px; }
 table th { font-size: 11px; letter-spacing: .02em; text-transform: uppercase; color: #6b7280; }
 [data-theme="dark"] { --paper: #0b0f0e; --card: #111827; --ink: #f9fafb; --line: #374151; --mast: #111827; --mast-ink: #f9fafb; }

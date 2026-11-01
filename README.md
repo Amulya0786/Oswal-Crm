@@ -177,6 +177,12 @@ DigitalOcean managed Postgres takes a daily backup. Restore it once on the stagi
 
 Set `SENTRY_DSN` if you want the app to forward errors. Leave it empty and nothing is sent. `/api/health` checks that Postgres answers.
 
+## Authenticator during an import
+
+`ADMIN_2FA_ENFORCE` defaults to on. An Admin or State Head who has not set up an authenticator is sent to the setup page and does not get a session. An existing session is not checked again, so a login that already happened keeps working.
+
+Set `ADMIN_2FA_ENFORCE=0` to issue a normal session without an authenticator. Or set `ADMIN_2FA_GRACE_UNTIL` to a future time. Until that time, login also issues a session without an authenticator. If the account already has an authenticator, the code is still required. Turn enforcement back on when the import has finished.
+
 ## Mail
 
 Password reset and the bulk user import send a 30-minute link when `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `SMTP_FROM` are set. Without them the link is not emailed.

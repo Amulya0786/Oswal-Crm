@@ -18,7 +18,7 @@ export function SaveView() {
       await fetch("/api/desk/views", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, filters }) });
       window.location.reload();
     }}>
-      <input name="name" placeholder="Save this view" />
+      <label className="stack">View name<input name="name" aria-label="View name" placeholder="Save this view" /></label>
       <button className="btn line" type="submit">Save</button>
     </form>
   );

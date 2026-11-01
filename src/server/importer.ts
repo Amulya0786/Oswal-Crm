@@ -5,13 +5,13 @@ import { HttpError } from "./http";
 import { nextTicketNo, rememberTicket } from "./ticket-seq";
 import { parseCsv } from "@/lib/csv";
 import { suggestMapping, COMPLAINT_FIELDS, CUSTOMER_FIELDS, PRODUCT_FIELDS, USER_FIELDS } from "@/lib/import-map";
-import { normalizeCallType, normalizePriority, normalizeSource, labelOf, STATUSES, DEFAULT_SLA_HOURS } from "@/lib/labels";
+import { normalizeCallType, normalizePriority, normalizeSource, labelOf, STATUSES, DEFAULT_SLA_HOURS, FIRST_CONTACT_HOURS } from "@/lib/labels";
 import { validateSerial } from "@/lib/quality";
 import { companyCodeForCategory } from "@/lib/company-tag";
 import { ensureAsset, ensureCustomer, relinkAsset } from "./link";
 import { normalizePhone } from "@/lib/mask";
 import { parseLooseDate } from "@/lib/time";
-import { IMPORT_BATCH, classifyHistoryDate, closedHistory, resolveHistoryCutoff, tallyHistory } from "@/lib/import-cutoff";
+import { IMPORT_BATCH, classifyHistoryDate, openImportStatus, resolveHistoryCutoff, tallyHistory } from "@/lib/import-cutoff";
 import type { SessionUser } from "@/lib/types";
 import bcrypt from "bcryptjs";
 import { loadObject, saveObject } from "./storage";
@@ -74,7 +74,13 @@ function mapped(row: Record<string, string>, mapping: Record<string, string>) {
   const out: Record<string, string> = {};
   for (const [header, field] of Object.entries(mapping)) {
     if (!field || field === "ignore") continue;
-    out[field] = row[header] ?? "";
+    const incoming = row[header] ?? "";
+    if (field === "serialNo") {
+      const productSerial = header.toLowerCase().includes("product");
+      if (!out.serialNo?.trim() || (productSerial && incoming.trim())) out.serialNo = incoming;
+      continue;
+    }
+    if (!out[field]?.trim() || incoming.trim()) out[field] = incoming;
   }
   return out;
 }
@@ -208,9 +214,22 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         products.push(product);
       }
       const assignedName = (row.assignedName || row.autoAssigned || "").trim();
-      const employeeCode = (row.employeeCode || "").trim().toLowerCase();
-      const engineer = engineers.find((item) => employeeCode && item.employeeCode?.toLowerCase() === employeeCode)
-        ?? engineers.find((item) => item.companyId === company.id && item.name.toLowerCase() === assignedName.toLowerCase());
+      const employeeCode = (row.employeeCode || "").trim();
+      let engineer = engineers.find((item) => employeeCode && item.employeeCode?.toLowerCase() === employeeCode.toLowerCase())
+        ?? engineers.find((item) => assignedName && item.companyId === company.id && item.name.toLowerCase() === assignedName.toLowerCase());
+      if (!engineer && (assignedName || employeeCode)) {
+        engineer = await prisma.engineer.create({
+          data: {
+            companyId: company.id,
+            name: assignedName || employeeCode,
+            employeeCode: employeeCode || null,
+            kind: "ENGINEER",
+            stateId: state?.id ?? null,
+            districtId: district?.id ?? null,
+          },
+        });
+        engineers.push(engineer);
+      }
       let nature = issues.find((item) => item.name.toLowerCase() === (row.natureText ?? "").trim().toLowerCase());
       const natureName = (row.natureText ?? "").trim();
       if (natureName && !nature) {
@@ -222,7 +241,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         const existingCategory = await prisma.category.findUnique({ where: { name: categoryName } });
         if (!existingCategory) await prisma.category.create({ data: { name: categoryName, companyCode: company.code } });
       }
-      const history = closedHistory(row.status);
+      const history = openImportStatus(row.status);
       const status = history.status;
       const callType = normalizeCallType(row.callType);
       const hours = DEFAULT_SLA_HOURS[callType] ?? 72;
@@ -306,6 +325,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         schemeName: row.schemeName || null,
         slaHours: hours,
         slaDueAt: new Date(bookDate.getTime() + hours * 3600 * 1000),
+        callbackDueAt: new Date(bookDate.getTime() + FIRST_CONTACT_HOURS * 3600 * 1000),
         createdById: user.id,
       };
       const ticketNo = row.ticketNo?.trim();

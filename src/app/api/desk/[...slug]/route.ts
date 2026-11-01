@@ -147,6 +147,18 @@ async function route(method: string, slug: string[], req: Request) {
 
   if (method === "GET" && head === "map") {
     const company = scope === "all" ? {} : { companyId: scope };
+    const date = url.searchParams.get("date");
+    const engineerId = url.searchParams.get("engineerId");
+    const dayStart = date ? new Date(`${date}T00:00:00+05:30`) : null;
+    const dayEnd = dayStart ? new Date(dayStart.getTime() + 86400000) : null;
+    const trail = dayStart && dayEnd
+      ? await prisma.techPing.findMany({
+          where: { ...(engineerId ? { engineerId } : {}), at: { gte: dayStart, lt: dayEnd } },
+          orderBy: { at: "asc" },
+          take: 2000,
+          include: { engineer: { select: { name: true } } },
+        })
+      : [];
     const [complaints, engineers] = await Promise.all([
       prisma.complaint.findMany({
         where: { ...company, status: { in: ["OPEN", "ASSIGNED", "REASSIGNED", "PENDING"] }, lat: { not: null }, lng: { not: null }, excludeFromMis: false },
@@ -161,6 +173,7 @@ async function route(method: string, slug: string[], req: Request) {
     ]);
     return json({
       provider: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || process.env.GOOGLE_MAPS_KEY ? "google" : "osm",
+      trail: trail.map((ping) => ({ engineerId: ping.engineerId, name: ping.engineer.name, lat: ping.lat, lng: ping.lng, at: ping.at })),
       complaints,
       engineers: engineers.map((engineer) => ({
         id: engineer.id,

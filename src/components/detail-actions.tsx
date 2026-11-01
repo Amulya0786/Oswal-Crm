@@ -48,7 +48,7 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
       )}
       {panel === "hold" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); send({ action: "hold", holdReason: new FormData(event.currentTarget).get("reason") }); }}>
-          <input name="reason" placeholder="Hold reason" required />
+          <label className="stack">Hold reason<input name="reason" aria-label="Hold reason" required /></label>
           <button className="btn">Hold</button>
         </form>
       )}
@@ -60,12 +60,12 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
           send({ action: "close", problemId: data.get("problemId"), solutionId: data.get("solutionId"), problemText: data.get("problemText"), solutionText: data.get("solutionText"), checklist, serialNo: data.get("serialNo"), missingSerialReason: data.get("missingSerialReason"), nameplateCaptured: data.get("nameplate") === "on" });
         }}>
           <select name="problemId"><option value="">Actual problem</option>{problems.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
-          <input name="problemText" placeholder="Problem" />
+          <label className="stack">Problem<input name="problemText" aria-label="Problem" /></label>
           <select name="solutionId"><option value="">Actual solution</option>{solutions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
-          <input name="solutionText" placeholder="Solution" />
-          <input name="serialNo" placeholder="Serial number" />
+          <label className="stack">Solution<input name="solutionText" aria-label="Solution" /></label>
+          <label className="stack">Serial number<input name="serialNo" aria-label="Serial number" /></label>
           <label className="chip"><input type="checkbox" name="nameplate" /> Nameplate photo taken</label>
-          <input name="missingSerialReason" placeholder="Missing serial reason" />
+          <label className="stack">Missing serial reason<input name="missingSerialReason" aria-label="Missing serial reason" /></label>
           <div className="chips">{checks.map((item) => <label key={item.id} className="chip"><input type="checkbox" name={`check-${item.id}`} /> {item.name}</label>)}</div>
           <button className="btn">Close complaint</button>
         </form>
@@ -73,19 +73,19 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
       {panel === "happy" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); send({ action: "happy", rating: Number(data.get("rating")), remarks: data.get("remarks") }); }}>
           <select name="rating" defaultValue="5">{[1, 2, 3, 4, 5].map((n) => <option key={n}>{n}</option>)}</select>
-          <input name="remarks" placeholder="Remarks" />
+          <label className="stack">Remarks<input name="remarks" aria-label="Remarks" /></label>
           <button className="btn">Save feedback</button>
         </form>
       )}
       {panel === "cancel" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); send({ action: "cancel", cancelReason: new FormData(event.currentTarget).get("reason") }); }}>
-          <input name="reason" placeholder="Cancel reason" required />
+          <label className="stack">Cancel reason<input name="reason" aria-label="Cancel reason" required /></label>
           <button className="btn">Cancel complaint</button>
         </form>
       )}
       {panel === "note" && (
         <form className="stack" onSubmit={(event) => { event.preventDefault(); send({ action: "note", note: new FormData(event.currentTarget).get("note") }); }}>
-          <textarea name="note" placeholder="Note" required />
+          <label className="stack">Note<textarea name="note" aria-label="Note" required /></label>
           <button className="btn">Add note</button>
         </form>
       )}

@@ -131,7 +131,12 @@ export async function login(email: string, password: string, meta: { ip?: string
     }
     return null;
   }
-  if ((user.role === "ADMIN" || user.role === "STATE_HEAD") && !user.totpEnabled) return { setupTotp: true as const, userId: user.id };
+  const enforceTotp = process.env.ADMIN_2FA_ENFORCE !== "0";
+  const graceUntil = process.env.ADMIN_2FA_GRACE_UNTIL ? new Date(process.env.ADMIN_2FA_GRACE_UNTIL) : null;
+  const inGrace = Boolean(graceUntil && !Number.isNaN(graceUntil.getTime()) && graceUntil.getTime() > Date.now());
+  if (enforceTotp && !inGrace && (user.role === "ADMIN" || user.role === "STATE_HEAD") && !user.totpEnabled) {
+    return { setupTotp: true as const, userId: user.id };
+  }
   if (user.totpEnabled) {
     const { totpMatches } = await import("./totp");
     if (!user.totpSecret || !totpMatches(user.totpSecret, meta.totp ?? "")) return { needsTotp: true as const };

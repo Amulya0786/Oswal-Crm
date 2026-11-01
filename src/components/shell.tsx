@@ -18,6 +18,8 @@ const GROUPS = [
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/map", label: "Map", icon: MapIcon },
     { href: "/attendance", label: "Attendance", icon: Clock },
+    { href: "/expenses", label: "Expenses", icon: ClipboardList },
+    { href: "/contracts", label: "AMC", icon: ClipboardList },
   ] },
   { label: "Masters", items: [{ href: "/masters", label: "Masters", icon: Library }] },
   { label: "Reports", items: [
@@ -29,6 +31,7 @@ const GROUPS = [
   { label: "Admin", items: [
     { href: "/security", label: "Security", icon: Shield },
     { href: "/health", label: "Data health", icon: Shield },
+    { href: "/engineers", label: "Signatures", icon: Users },
     { href: "/import", label: "Import", icon: Upload },
     { href: "/settings", label: "Settings", icon: Settings },
     { href: "/connect", label: "Power BI", icon: BarChart3 },
@@ -62,6 +65,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       if (item.href === "/performance" || item.href === "/reports/daily") return user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
       if (item.href === "/assign") return user.caps.assign;
+      if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/engineers") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       if (item.href === "/health") return user.caps.security;
       if (item.href === "/map" || item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;
@@ -141,7 +145,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             ))}
             {user.caps.allCompanies && <button className={scope === "all" ? "active" : ""} onClick={() => choose("all")}>All</button>}
           </div>
-          <button className="search-btn" onClick={() => setOpen(true)}><Search size={16} /> Search <kbd>Ctrl K</kbd></button>
+          <button className="search-btn" aria-label="Search" onClick={() => setOpen(true)}><Search size={16} /> {DESK_LABEL[lang].Search ?? "Search"} <kbd>Ctrl K</kbd></button>
           <button type="button" className="icon-btn" aria-label="Language" onClick={() => {
             const next = lang === "hi" ? "en" : "hi";
             setLang(next);
@@ -153,7 +157,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
           <button type="button" className="btn signout" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
           <span className="live-dot" title="Live" />
           <details className="user-menu">
-            <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#d5e7dc" }}>{ROLE_LABEL[user.role]}</div></summary>
+            <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#374151" }}>{ROLE_LABEL[user.role]}</div></summary>
             <div className="user-pop">
               <div style={{ padding: 8 }}>{user.email}</div>
               <Link href="/exports">{DESK_LABEL[lang].Exports}</Link>
@@ -199,7 +203,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       {open && (
         <div className="palette" onClick={() => setOpen(false)}>
           <form onClick={(event) => event.stopPropagation()}>
-            <input autoFocus placeholder="Search" value={q} onChange={(event) => setQ(event.target.value)} />
+            <input autoFocus aria-label="Search" placeholder="Search" value={q} onChange={(event) => setQ(event.target.value)} />
             <div>
               {hits.complaints.map((row) => <Link className="hit" key={row.id} href={`/complaints/${row.ticketNo}`} onClick={() => setOpen(false)}><b className="mono">{row.ticketNo}</b> · {row.customerName} · {row.status}</Link>)}
               {hits.customers.map((row) => <Link className="hit" key={row.id} href={`/customers/${row.id}`} onClick={() => setOpen(false)}>{row.name} · {row.phone}</Link>)}

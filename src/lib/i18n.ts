@@ -65,6 +65,12 @@ export const DESK_LABEL: Record<FieldLang, Record<string, string>> = {
     "Company split": "Company split",
     Book: "Book",
     "Book a complaint": "Book a complaint",
+    Search: "Search",
+    Expenses: "Expenses",
+    AMC: "AMC",
+    Signatures: "Signatures",
+    "Data health": "Data health",
+    "To assign": "To assign",
   },
   hi: {
     Desk: "डेस्क",
@@ -97,6 +103,12 @@ export const DESK_LABEL: Record<FieldLang, Record<string, string>> = {
     "Company split": "कंपनी",
     Book: "बुक",
     "Book a complaint": "शिकायत दर्ज करें",
+    Search: "खोज",
+    Expenses: "खर्च",
+    AMC: "एएमसी",
+    Signatures: "हस्ताक्षर",
+    "Data health": "डेटा जाँच",
+    "To assign": "सौंपना बाकी",
   },
 };
 
