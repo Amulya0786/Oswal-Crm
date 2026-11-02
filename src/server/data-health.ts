@@ -37,16 +37,27 @@ export async function purgeQa(apply: boolean) {
   const where = {
     OR: [
       { qaFlag: true },
-      { customerName: { startsWith: "QA TEST" } },
+      { customerName: { startsWith: "QA", mode: "insensitive" as const } },
+      { customerName: { equals: "test", mode: "insensitive" as const } },
+      { customerName: { equals: "abc", mode: "insensitive" as const } },
+      { customerName: { equals: "asdf", mode: "insensitive" as const } },
+      { customer: { isTest: true } },
       ...(ids.length ? [{ createdById: { in: ids } }] : []),
     ],
   };
+  const customers = await prisma.customer.count({
+    where: { OR: [{ isTest: true }, { name: { startsWith: "QA", mode: "insensitive" } }, { name: { equals: "test", mode: "insensitive" } }] },
+  });
   const tickets = await prisma.complaint.count({ where });
   if (apply) {
     await prisma.complaint.updateMany({ where, data: { excludeFromMis: true, qaFlag: true, status: "CANCELLED", finalStatus: "Cancelled", cancelReason: "QA data removed from live counts" } });
-    if (ids.length) await prisma.user.updateMany({ where: { id: { in: ids } }, data: { active: false } });
+    await prisma.customer.updateMany({
+      where: { OR: [{ isTest: true }, { name: { startsWith: "QA", mode: "insensitive" } }, { name: { equals: "test", mode: "insensitive" } }] },
+      data: { isTest: true },
+    });
+    if (ids.length) await prisma.user.updateMany({ where: { id: { in: ids } }, data: { active: false, isTest: true } });
   }
-  return { dryRun: !apply, users: users.length, tickets };
+  return { dryRun: !apply, users: users.length, tickets, customers };
 }
 
 export async function repairName(ticketNo: string, customerName: string) {

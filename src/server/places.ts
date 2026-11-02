@@ -3,7 +3,7 @@ import path from "path";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 
-async function mastersFile(name: string) {
+export async function mastersFile(name: string) {
   const candidates = [
     path.join(process.cwd(), "data", "masters", name),
     path.resolve(process.cwd(), "..", "..", "data", "masters", name),
@@ -54,7 +54,7 @@ export async function searchPlaces(kind: string, q: string, stateId?: string | n
     const rows = await prisma.tehsil.findMany({
       where: { districtId, active: true, ...(query ? { name: { contains: query, mode: "insensitive" } } : {}) },
       orderBy: { name: "asc" },
-      take: 20,
+      take: 80,
     });
     return rows.map((row) => ({ id: row.id, label: row.name, districtId }));
   }

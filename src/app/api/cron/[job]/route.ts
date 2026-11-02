@@ -4,7 +4,8 @@ import { sweepAssignmentQueue } from "@/server/assignment";
 import { json } from "@/server/http";
 
 export async function POST(req: Request, context: { params: Promise<{ job: string }> }) {
-  const secret = new URL(req.url).searchParams.get("key") || req.headers.get("x-cron-key");
+  if (new URL(req.url).searchParams.has("key")) return json({ error: "Send the cron key in the x-cron-key header" }, 400);
+  const secret = req.headers.get("x-cron-key");
   const expected = process.env.CRON_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-cron");
   if (!expected || secret !== expected) return json({ error: "Bad cron key" }, 401);
   const { job } = await context.params;

@@ -132,10 +132,11 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     LIMIT 8
   `;
   const filled = [];
+  const dayKey = (value: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(value);
   for (let offset = 29; offset >= 0; offset -= 1) {
     const day = new Date(now.getTime() - offset * 86400000);
-    const key = day.toISOString().slice(0, 10);
-    const found = trend.find((row) => new Date(row.day).toISOString().slice(0, 10) === key);
+    const key = dayKey(day);
+    const found = trend.find((row) => dayKey(new Date(row.day)) === key);
     filled.push({ day: key, booked: found?.booked ?? 0 });
   }
   const byCall = await prisma.$queryRaw<{ label: string; n: number }[]>`

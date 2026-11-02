@@ -79,6 +79,7 @@ async function route(method: string, slug: string[], req: Request) {
   if (method === "GET" && head === "live") return json({ version: await getVersion() });
 
   if (method === "GET" && head === "performance") {
+    if (!user.caps.analytics) return json({ error: "You cannot open technician scores" }, 403);
     const engineers = await prisma.engineer.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 200 });
     const rows = [];
     for (const engineer of engineers) {
@@ -422,6 +423,7 @@ async function route(method: string, slug: string[], req: Request) {
   }
 
   if (head === "exports" && method === "GET") {
+    if (!user.caps.export && !user.caps.security) return json({ error: "You cannot export" }, 403);
     const jobs = await prisma.exportJob.findMany({ where: user.caps.security ? {} : { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 });
     return json({ jobs });
   }

@@ -7,6 +7,7 @@ import { mergeDistricts, searchPlaces, seedCities, seedDistrictAliases, seedTehs
 import { changeEngineerState, confirmAssignment, reassignOpenComplaints, sweepAssignmentQueue } from "./assignment";
 import { allSettings, saveSetting } from "./settings";
 import { repeatProgress, startRepeatRebuild } from "./repeats";
+import { aliasMergePlan, applyAliasMerges } from "./district-merge";
 
 function admin(user: SessionUser) {
   return user.role === "ADMIN";
@@ -53,6 +54,17 @@ export async function release3(method: string, head: string, id: string | undefi
     }
     return json({ seeded: defs.length });
   }
+  if (head === "health" && method === "POST" && id === "merge-aliases") {
+    if (!admin(user)) return json({ error: "Admins only" }, 403);
+    const body = await readJson(req);
+    if (body.apply === true) return json(await applyAliasMerges(user.id));
+    return json(await aliasMergePlan());
+  }
+  if (head === "health" && method === "POST" && id === "pincodes") {
+    if (!admin(user)) return json({ error: "Admins only" }, 403);
+    const { linkLoosePincodes } = await import("./pincode-blocks");
+    return json(await linkLoosePincodes());
+  }
   if (head === "health" && method === "POST" && id === "cities") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);
     return json(await seedCities());
@@ -67,7 +79,17 @@ export async function release3(method: string, head: string, id: string | undefi
     try { await sweepAssignmentQueue(); } catch { /* the queue still loads if the sweep cannot write */ }
     const pageSize = 50;
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
-    const where = { status: "OPEN" as const, engineerId: null, excludeFromMis: false, ...(user.role === "STATE_HEAD" ? { stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } } : {}) };
+    const ageDays = Number(url.searchParams.get("age") ?? 0);
+    const where = {
+      status: "OPEN" as const,
+      engineerId: null,
+      excludeFromMis: false,
+      ...(user.role === "STATE_HEAD" ? { stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } } : {}),
+      ...(url.searchParams.get("callType") ? { callType: url.searchParams.get("callType")! } : {}),
+      ...(url.searchParams.get("district") ? { districtName: { contains: url.searchParams.get("district")!, mode: "insensitive" as const } } : {}),
+      ...(url.searchParams.get("sla") === "1" ? { slaBreached: true } : {}),
+      ...(ageDays > 0 ? { bookDate: { lte: new Date(Date.now() - ageDays * 86400000) } } : {}),
+    };
     const [rows, total] = await Promise.all([
       prisma.complaint.findMany({
         where,
@@ -84,7 +106,46 @@ export async function release3(method: string, head: string, id: string | undefi
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
     const body = await readJson(req);
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
-    return json(await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null));
+    return json(await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null, body.reason ? String(body.reason) : null));
+  }
+  if (head === "engineers" && method === "POST" && id === "users") {
+    if (!admin(user)) return json({ error: "Admins only" }, 403);
+    const body = await readJson(req);
+    const lines = String(body.csv ?? "").replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+    const header = lines.shift()?.split(",").map((cell) => cell.trim().toLowerCase()) ?? [];
+    let linked = 0;
+    for (const line of lines) {
+      const cells = line.split(",").map((cell) => cell.trim());
+      const row: Record<string, string> = {};
+      header.forEach((key, index) => { row[key] = cells[index] ?? ""; });
+      const email = (row.email || "").toLowerCase();
+      if (!email || !row.name) continue;
+      const engineer = await prisma.engineer.findFirst({
+        where: { OR: [{ phone: row.phone || "none" }, { name: { equals: row.name, mode: "insensitive" } }], active: true },
+      });
+      if (!engineer) continue;
+      const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { engineerId: engineer.id }] } });
+      if (existing) {
+        if (!existing.engineerId) await prisma.user.update({ where: { id: existing.id }, data: { engineerId: engineer.id, role: "TECHNICIAN" } });
+        linked += 1;
+        continue;
+      }
+      const password = `Ow${Math.random().toString(36).slice(2, 10)}A1`;
+      await prisma.user.create({
+        data: {
+          name: row.name,
+          email,
+          role: "TECHNICIAN",
+          phone: row.phone || engineer.phone,
+          engineerId: engineer.id,
+          passwordHash: await bcrypt.hash(password, 10),
+          mustChangePassword: true,
+          memberships: { create: [{ companyId: engineer.companyId }] },
+        },
+      });
+      linked += 1;
+    }
+    return json({ linked });
   }
   if (head === "engineers" && method === "POST" && id === "signature") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);

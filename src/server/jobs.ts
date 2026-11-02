@@ -8,6 +8,7 @@ import { notifyComplaint, deliver } from "./notify";
 import { textPdf } from "@/lib/pdf";
 import { kolkataTodayStart, midnightShift, formatDay } from "@/lib/time";
 import { publicOrigin } from "@/lib/origin";
+import { setting } from "./settings";
 
 type LadderUser = { id: string; name: string; role: string };
 
@@ -276,11 +277,15 @@ export async function runSummary(now = new Date()) {
     create: { key: "lastSummary", value: JSON.stringify({ html, file, at: now.toISOString(), lines }) },
     update: { value: JSON.stringify({ html, file, at: now.toISOString(), lines }) },
   });
-  const to = process.env.SUMMARY_EMAIL ?? "management@oswal.test";
-  await deliver({ channel: "EMAIL", to, subject: "Oswal daily summary", body: lines.join("\n") });
-  await prisma.notificationLog.create({
-    data: { channel: "EMAIL", recipient: to, event: "SUMMARY", body: lines.join("\n"), provider: "console", status: "LOGGED", detail: file },
-  });
+  const configured = (await setting("DAILY_SUMMARY_TO")).split(/[,;\s]+/).map((item) => item.trim()).filter((item) => item.includes("@"));
+  const recipients = configured.length ? configured : (process.env.SUMMARY_EMAIL ? [process.env.SUMMARY_EMAIL] : []);
+  if (!recipients.length) return { lines, file, sent: false as const, reason: "Set DAILY_SUMMARY_TO or SUMMARY_EMAIL" };
+  for (const to of recipients) {
+    await deliver({ channel: "EMAIL", to, subject: "Oswal daily summary", body: lines.join("\n") });
+    await prisma.notificationLog.create({
+      data: { channel: "EMAIL", recipient: to, event: "SUMMARY", body: lines.join("\n"), provider: "console", status: "LOGGED", detail: file },
+    });
+  }
   const managers = (process.env.SUMMARY_WHATSAPP ?? "").split(",").map((item) => item.trim()).filter(Boolean);
   const { sendWhatsApp } = await import("./whatsapp");
   for (const phone of managers) {

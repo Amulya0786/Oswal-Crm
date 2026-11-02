@@ -195,17 +195,22 @@ model Area {
 }
 
 model Pincode {
-  id         String   @id @default(cuid())
-  code       String   @unique
-  districtId String
-  areaId     String?
-  blockId    String?
-  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  area       Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
-  block      Tehsil?  @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  id                String   @id @default(cuid())
+  code              String   @unique
+  districtId        String
+  areaId            String?
+  blockId           String?
+  cityId            String?
+  urban             Boolean  @default(false)
+  blockApproximate  Boolean  @default(false)
+  district          District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  area              Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  block             Tehsil?  @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  city              City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
 
   @@index([districtId])
   @@index([blockId])
+  @@index([cityId])
 }
 
 model Category {
@@ -1042,14 +1047,15 @@ model Tehsil {
 }
 
 model City {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   name       String
   districtId String
   kind       String?
-  pincodes   String   @default("")
+  pincodes   String    @default("")
   lgdCode    String?
-  active     Boolean  @default(true)
-  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  active     Boolean   @default(true)
+  district   District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  pins       Pincode[]
 
   @@unique([districtId, name])
   @@index([districtId])

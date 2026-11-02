@@ -66,7 +66,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       if (item.href === "/performance" || item.href === "/reports/daily") return user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
       if (item.href === "/assign") return user.caps.assign;
-      if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/engineers" || item.href === "/leave") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
+      if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/leave") return false;
+      if (item.href === "/engineers") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       if (item.href === "/health") return user.caps.security;
       if (item.href === "/map" || item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;
@@ -155,7 +156,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             document.documentElement.lang = next;
           }}>{lang === "hi" ? "EN" : "हिंदी"}</button>
           <ThemeToggle />
-          <button type="button" className="btn signout" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
+          <button type="button" className="btn signout" style={{ display: "inline-flex" }} onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
           <span className="live-dot" title="Live" />
           <details className="user-menu">
             <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#374151" }}>{ROLE_LABEL[user.role]}</div></summary>

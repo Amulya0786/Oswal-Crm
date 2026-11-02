@@ -126,11 +126,11 @@ export async function queueAssignment(complaintId: string) {
   return { suggestion: top ?? null, auto: Boolean(auto && top) };
 }
 
-export async function confirmAssignment(ids: string[], engineerId?: string | null) {
+export async function confirmAssignment(ids: string[], engineerId?: string | null, reason?: string | null) {
   const now = new Date();
   let updated = 0;
   for (const id of ids) {
-    const row = await prisma.complaint.findUnique({ where: { id } });
+    const row = await prisma.complaint.findUnique({ where: { id }, include: { company: true } });
     if (!row) continue;
     const chosen = engineerId || row.suggestedEngineerId;
     if (!chosen) continue;
@@ -146,12 +146,24 @@ export async function confirmAssignment(ids: string[], engineerId?: string | nul
         acceptedAt: null,
         status: row.engineerId ? "REASSIGNED" : "ASSIGNED",
         finalStatus: row.engineerId ? "Re-assigned" : "Assigned",
-        assignReason: "Confirmed from the assign queue",
+        assignReason: reason?.slice(0, 240) || "Confirmed from the assign queue",
         version: { increment: 1 },
       },
     });
     await prisma.complaintEvent.create({
-      data: { complaintId: id, type: "ASSIGNED", message: `Assigned to ${engineer.name} from the queue` },
+      data: { complaintId: id, type: row.engineerId ? "REASSIGNED" : "ASSIGNED", message: `${row.engineerId ? "Re-assigned" : "Assigned"} to ${engineer.name}${reason ? `: ${reason}` : ""}` },
+    });
+    const { notifyComplaint } = await import("./notify");
+    await notifyComplaint({
+      event: "ASSIGNED",
+      companyId: row.companyId,
+      companyName: row.company.shortName,
+      complaintId: row.id,
+      ticketNo: row.ticketNo,
+      customerName: row.customerName,
+      phone: engineer.phone || row.phone,
+      engineer: engineer.name,
+      status: row.engineerId ? "REASSIGNED" : "ASSIGNED",
     });
     updated += 1;
   }

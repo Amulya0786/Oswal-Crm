@@ -38,6 +38,9 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
   const [areaHits, setAreaHits] = useState<{ id: string; label: string }[]>([]);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [ticketNo, setTicketNo] = useState("");
+  const [tehsilId, setTehsilId] = useState("");
+  const [tehsils, setTehsils] = useState<{ id: string; label: string }[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [history, setHistory] = useState<null | {
     customerId: string;
@@ -156,6 +159,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
         stateId,
         districtId,
         areaId,
+        tehsilId: tehsilId || null,
         callType,
         categoryId: categoryId || null,
         productId: productId || null,
@@ -182,14 +186,29 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
       showToast(message);
       return;
     }
-    router.push(`/complaints/${body.ticketNo}?new=1`);
+    setTicketNo(body.ticketNo);
     router.refresh();
   }
+
+  useEffect(() => {
+    if (!districtId) { setTehsils([]); return; }
+    void fetch(`/api/desk/geo?kind=tehsil&districtId=${districtId}&q=`).then(async (response) => {
+      if (response.ok) setTehsils((await response.json()).rows ?? []);
+    });
+  }, [districtId]);
 
   const districtName = districts.find((row) => row.id === districtId)?.name;
   const productName = products.find((row) => row.id === productId)?.name;
   return (
     <form action={onSubmit} className="book-layout">
+      {ticketNo && (
+        <section className="panel stack">
+          <h2>Complaint saved</h2>
+          <p className="mono">{ticketNo}</p>
+          <p>The state head will assign a technician. The customer can track it, and the SMS or WhatsApp hook runs when those channels are configured.</p>
+          <a className="btn" href={`/complaints/${ticketNo}`}>Open the complaint</a>
+        </section>
+      )}
       <div className="stack">
       <div className="chips">
         {companies.map((company) => (
@@ -247,8 +266,8 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
       <section className="panel stack form-section" hidden={step < 2}>
         <header className="section-head"><span className="step">2</span><h2>Address</h2></header>
         <label className="stack">Address<input name="address" defaultValue={customer?.address ?? ""} key={`${customer?.id ?? "new"}-address`} /></label>
-        <div className="filters">
-          <label className="stack">State<select value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictId(""); }}>
+        <div className="form-grid">
+          <label className="stack">State<select aria-label="State" value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictId(""); setTehsilId(""); }}>
             <option value="">State</option>
             {(options.states as Option[]).map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
           </select></label>
@@ -265,7 +284,11 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           }} />
             {areaHits.map((hit) => <button type="button" key={hit.id} className="chip" onClick={() => { setAreaId(hit.id); setAreaQuery(hit.label); setAreaHits([]); }}>{hit.label}</button>)}
           </label>
-          <label className="stack">Pincode <span className="req">*</span><input name="pincode" inputMode="numeric" maxLength={6} required value={pincode} onChange={async (event) => {
+          <label className="stack">Tehsil / block<select aria-label="Tehsil" value={tehsilId} onChange={(event) => setTehsilId(event.target.value)}>
+            <option value="">Tehsil</option>
+            {tehsils.map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}
+          </select></label>
+          <label className="stack">Pincode <span className="req">*</span><input name="pincode" aria-label="Pincode" inputMode="numeric" maxLength={6} required value={pincode} onChange={async (event) => {
             const value = event.target.value.replace(/\D/g, "").slice(0, 6);
             setPincode(value);
             if (/^[1-9]\d{5}$/.test(value)) {

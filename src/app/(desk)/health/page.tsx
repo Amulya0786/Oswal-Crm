@@ -38,6 +38,9 @@ export default function HealthPage() {
         <button className="btn line" onClick={() => void run("/api/desk/health/aliases")}>Seed district aliases</button>
         <button className="btn line" onClick={() => void run("/api/desk/health/tehsils")}>Seed tehsils</button>
         <button className="btn line" onClick={() => void run("/api/desk/health/cities")}>Seed cities</button>
+        <button className="btn line" onClick={() => void run("/api/desk/health/merge-aliases")}>Merge aliases dry run</button>
+        <button className="btn" onClick={() => void run("/api/desk/health/merge-aliases", { apply: true })}>Merge all aliases</button>
+        <button className="btn line" onClick={() => void run("/api/desk/health/pincodes")}>Link pincodes</button>
       </div>
       <h2>Merge list</h2>
       <ul>{(data?.mergeList ?? []).map((row: { alias: string; state: string; into: string }) => <li key={`${row.state}-${row.alias}`}>{row.alias}, {row.state} → {row.into}</li>)}</ul>
