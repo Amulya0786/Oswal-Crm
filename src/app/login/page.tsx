@@ -9,6 +9,7 @@ const DEMOS = [["Admin", "admin@oswal.test", "Admin@123"]];
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
   async function onSubmit(formData: FormData) {
     setPending(true);
     setError("");
@@ -20,11 +21,12 @@ export default function LoginPage() {
     setPending(false);
     const body = await response.json();
     if (body.needsTotp) {
+      setNeedsCode(true);
       setError("Enter the 6-digit authenticator code");
       return;
     }
     if (body.setupTotp) {
-      window.location.href = `/totp?user=${body.userId}`;
+      window.location.href = "/totp";
       return;
     }
     if (!response.ok) {
@@ -50,7 +52,7 @@ export default function LoginPage() {
           <h2>Service desk</h2>
           <label className="stack">Email<input name="email" type="email" autoComplete="username" required defaultValue={showDemo ? "admin@oswal.test" : ""} /></label>
           <label className="stack">Password<input name="password" type="password" autoComplete="current-password" required defaultValue={showDemo ? "Admin@123" : ""} /></label>
-          <label className="stack">Authenticator code<input name="totp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} /></label>
+          {needsCode && <label className="stack">Authenticator code<input name="totp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required /></label>}
           <a href="/forgot">Forgot password</a>
           <a href="/book">Register a complaint</a>
           {error && <div className="banner bad">{error}</div>}

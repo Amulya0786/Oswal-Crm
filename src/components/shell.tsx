@@ -41,7 +41,7 @@ const GROUPS = [
 
 const CRUMB: Record<string, string> = {
   complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
-  security: "Security", import: "Import", settings: "Settings", attendance: "Attendance",
+  security: "Security", import: "Import", settings: "Settings", attendance: "Attendance", profile: "Profile",
   exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings", connect: "Power BI",
 };
 
@@ -161,6 +161,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             <summary>{user.name}<div className="muted" style={{ fontSize: 12, color: "#374151" }}>{ROLE_LABEL[user.role]}</div></summary>
             <div className="user-pop">
               <div style={{ padding: 8 }}>{user.email}</div>
+              <Link href="/profile">{DESK_LABEL[lang].Profile}</Link>
               <Link href="/exports">{DESK_LABEL[lang].Exports}</Link>
               <Link href="/field">{DESK_LABEL[lang]["Technician app"]}</Link>
               <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}><LogOut size={14} /> {DESK_LABEL[lang]["Sign out"]}</button>

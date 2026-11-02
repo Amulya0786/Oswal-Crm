@@ -49,6 +49,8 @@ model User {
   lockedUntil        DateTime?
   totpSecret         String?
   totpEnabled        Boolean  @default(false)
+  totpSetupHash      String?
+  totpSetupExpires   DateTime?
   resetTokenHash     String?
   resetExpires       DateTime?
   engineerId   String?  @unique

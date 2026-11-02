@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { login } from "@/server/auth";
+import { issueTotpSetup, login } from "@/server/auth";
 import { clientIp, fail } from "@/server/http";
 
 export async function POST(req: Request) {
@@ -13,7 +13,12 @@ export async function POST(req: Request) {
     if (!result) return NextResponse.json({ error: "Email or password is wrong" }, { status: 401 });
     if ("locked" in result) return NextResponse.json({ error: "This account is locked for 15 minutes" }, { status: 423 });
     if ("needsTotp" in result) return NextResponse.json({ needsTotp: true }, { status: 401 });
-    if ("setupTotp" in result) return NextResponse.json({ setupTotp: true, userId: result.userId }, { status: 403 });
+    if ("setupTotp" in result) {
+      const setup = await issueTotpSetup(result.userId);
+      const response = NextResponse.json({ setupTotp: true }, { status: 403 });
+      response.cookies.set("oswal_totp_setup", setup, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 10 });
+      return response;
+    }
     const response = NextResponse.json({ ok: true, name: result.user.name, role: result.user.role, mustChangePassword: result.user.mustChangePassword });
     response.cookies.set("oswal_session", result.token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7 });
     if (result.user.caps.allCompanies) response.cookies.set("oswal_company", "all", { httpOnly: false, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });

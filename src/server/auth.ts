@@ -2,7 +2,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
-import { timingSafeEqual } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { prisma } from "./db";
 import type { Capabilities, CompanyBrief, Role, SessionUser } from "@/lib/types";
 import { ROLES } from "@/lib/types";
@@ -132,10 +132,7 @@ export async function login(email: string, password: string, meta: { ip?: string
     }
     return null;
   }
-  const enforceTotp = process.env.ADMIN_2FA_ENFORCE !== "0";
-  const graceUntil = process.env.ADMIN_2FA_GRACE_UNTIL ? new Date(process.env.ADMIN_2FA_GRACE_UNTIL) : null;
-  const inGrace = Boolean(graceUntil && !Number.isNaN(graceUntil.getTime()) && graceUntil.getTime() > Date.now());
-  if (enforceTotp && !inGrace && (user.role === "ADMIN" || user.role === "STATE_HEAD") && !user.totpEnabled) {
+  if (mustEnrolTotp(user.role, user.totpEnabled)) {
     return { setupTotp: true as const, userId: user.id };
   }
   if (user.totpEnabled) {
@@ -144,6 +141,34 @@ export async function login(email: string, password: string, meta: { ip?: string
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
   return openSession(user.id);
+}
+
+/** Forced enrolment is off for every role unless ADMIN_2FA_ENFORCE=1. A grace time still skips it. A user who already turned the authenticator on is unchanged. */
+export function mustEnrolTotp(role: string, totpEnabled: boolean) {
+  if (totpEnabled) return false;
+  if (process.env.ADMIN_2FA_ENFORCE !== "1") return false;
+  if (role !== "ADMIN" && role !== "STATE_HEAD") return false;
+  const graceUntil = process.env.ADMIN_2FA_GRACE_UNTIL ? new Date(process.env.ADMIN_2FA_GRACE_UNTIL) : null;
+  if (graceUntil && !Number.isNaN(graceUntil.getTime()) && graceUntil.getTime() > Date.now()) return false;
+  return true;
+}
+
+export async function issueTotpSetup(userId: string) {
+  const token = randomBytes(32).toString("hex");
+  const totpSetupHash = createHash("sha256").update(token).digest("hex");
+  await prisma.user.update({
+    where: { id: userId },
+    data: { totpSetupHash, totpSetupExpires: new Date(Date.now() + 10 * 60 * 1000), failedLogins: 0, lockedUntil: null },
+  });
+  return token;
+}
+
+export async function userForTotpSetup(token: string | undefined) {
+  if (!token) return null;
+  const totpSetupHash = createHash("sha256").update(token).digest("hex");
+  return prisma.user.findFirst({
+    where: { totpSetupHash, totpSetupExpires: { gt: new Date() } },
+  });
 }
 
 export function importTokenOk(header: string | null) {

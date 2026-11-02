@@ -179,15 +179,15 @@ Set `SENTRY_DSN` if you want the app to forward errors. Leave it empty and nothi
 
 ## Import client
 
-Set `IMPORT_TOKEN` on the app. The import program sends it as the header `x-import-token`. That header is accepted only on `/api/desk/import/preview` and `/api/desk/import/commit`. It does not sign anyone into the desk and it does not need an authenticator. A normal admin login still asks for an authenticator unless `ADMIN_2FA_ENFORCE=0` or `ADMIN_2FA_GRACE_UNTIL` is still in the future.
+Set `IMPORT_TOKEN` on the app. The import program sends it as the header `x-import-token`. That header is accepted only on `/api/desk/import/preview` and `/api/desk/import/commit`. It does not sign anyone into the desk. Login uses email and password. An authenticator is asked for only when that person has already turned one on.
 
 Send `cutoff` in the commit body when closed history should start earlier than `IMPORT_CUTOFF`. Open tickets are kept back to 1 January 2024 even when the closed-history cutoff stays 1 April 2026.
 
-## Authenticator during an import
+## Authenticator
 
-`ADMIN_2FA_ENFORCE` defaults to on. An Admin or State Head who has not set up an authenticator is sent to the setup page and does not get a session. An existing session is not checked again, so a login that already happened keeps working.
+The authenticator is off for every role. Email and password open the desk. Nobody is sent to the setup page.
 
-Set `ADMIN_2FA_ENFORCE=0` to issue a normal session without an authenticator. Or set `ADMIN_2FA_GRACE_UNTIL` to a future time. Until that time, login also issues a session without an authenticator. If the account already has an authenticator, the code is still required. Turn enforcement back on when the import has finished.
+Set `ADMIN_2FA_ENFORCE=1` to require an Admin or State Head who has not set one up to enrol before they get a session. `ADMIN_2FA_ENFORCE=0`, or leaving it unset, keeps that off. `ADMIN_2FA_GRACE_UNTIL` in the future also skips forced setup while enforcement is on. A person who already turned the authenticator on still enters the code. Anyone signed in can turn it on from their profile. That page issues a 10-minute setup cookie; the setup page will not enrol an authenticator without it.
 
 ## Mail
 

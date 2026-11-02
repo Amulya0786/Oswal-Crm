@@ -5,6 +5,8 @@ const PUBLIC_PREFIXES = [
   "/track",
   "/book",
   "/api/auth/login",
+  "/api/auth/totp",
+  "/totp",
   "/api/public",
   "/api/v1",
   "/api/health",
