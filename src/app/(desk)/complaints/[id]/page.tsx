@@ -8,6 +8,7 @@ import { labelOf, CALL_TYPES, STATUSES, PRIORITIES, statusClass } from "@/lib/la
 import { ageDays, formatDay, formatWhen } from "@/lib/time";
 import { coverStatus } from "@/lib/history";
 import { VoiceBox } from "@/components/voice-box";
+import { NameReviewChip } from "@/components/name-review";
 
 export const metadata = { title: "Complaint" };
 
@@ -46,7 +47,7 @@ export default async function ComplaintDetail({ params, searchParams }: { params
       <div className="docket">
         <section className="panel">
           <h2>Customer</h2>
-          <p><b>{complaint.customerId ? <Link href={`/customers/${complaint.customerId}`}>{complaint.customerName}</Link> : complaint.customerName}</b><br />{complaint.phone}<br />{complaint.address}</p>
+          <p><b>{complaint.customerId ? <Link href={`/customers/${complaint.customerId}`}>{complaint.customerName}</Link> : complaint.customerName}</b> <NameReviewChip name={complaint.customerName} /><br />{complaint.phone}<br />{complaint.address}</p>
           <p>{complaint.areaName} · {complaint.districtName} · {complaint.stateName} · {complaint.pincode}</p>
           <h2>Complaint</h2>
           <p>{complaint.natureText}<br />{complaint.assetId ? <Link href={`/assets/${complaint.assetId}`}>{complaint.productDetails}</Link> : complaint.productDetails}<br />Serial {complaint.serialNo ?? (complaint.serialPending ? `Pending (${complaint.serialUnavailableReason ?? "not captured"})` : "—")} · Brand {complaint.brandName ?? "—"}</p>

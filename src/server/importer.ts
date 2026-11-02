@@ -4,7 +4,7 @@ import { HttpError } from "./http";
 import { nextTicketNo } from "./ticket-seq";
 import { parseCsv } from "@/lib/csv";
 import { suggestMapping, COMPLAINT_FIELDS, CUSTOMER_FIELDS, PRODUCT_FIELDS, USER_FIELDS } from "@/lib/import-map";
-import { normalizeCallType, normalizePriority, normalizeSource, labelOf, STATUSES, DEFAULT_SLA_HOURS, FIRST_CONTACT_HOURS } from "@/lib/labels";
+import { normalizeCallType, normalizePriority, labelOf, STATUSES, DEFAULT_SLA_HOURS, FIRST_CONTACT_HOURS } from "@/lib/labels";
 import { validateSerial } from "@/lib/quality";
 import { companyCodeForCategory } from "@/lib/company-tag";
 import { normalizePhone } from "@/lib/mask";
@@ -369,7 +369,7 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
         serialUnavailableReason: serialOk ? null : rawSerial ? "UNVERIFIED" : "OTHER",
         natureId: nature?.id,
         natureText: nature?.name ?? row.natureText,
-        source: normalizeSource("call"),
+        source: "IMPORT",
         callBy: row.callBy || user.name,
         priority: normalizePriority(row.priority),
         status,

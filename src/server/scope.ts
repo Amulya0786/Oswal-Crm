@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { ComplaintFilters, SessionUser } from "@/lib/types";
+import { nameReviewSql } from "@/lib/names";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 import {
   ageingBounds,
@@ -190,6 +191,7 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
   if (filters.risk === "1") parts.push(riskPredicate(ctx, alias));
   if (filters.repeat === "1") parts.push(Prisma.sql`${col(alias, "repeatFlag")} = true`);
   if (filters.serialPending === "1") parts.push(Prisma.sql`${col(alias, "serialNorm")} IS NULL`);
+  if (filters.nameReview === "1") parts.push(nameReviewSql(col(alias, "customerName")));
   if (filters.channel) parts.push(Prisma.sql`${col(alias, "channel")} = ${filters.channel}`);
   if (filters.includeTest === "1") {
     /* scopeSql already excludes test rows; this flag is handled by the caller */
@@ -235,6 +237,7 @@ export function filtersFromRecord(input: Record<string, string | string[] | unde
     asOf: one("asOf"),
     channel: one("channel"),
     includeTest: one("includeTest"),
+    nameReview: one("nameReview"),
     sort: one("sort"),
     dir: one("dir"),
     page: num("page"),

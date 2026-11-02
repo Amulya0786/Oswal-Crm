@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { json, readJson } from "./http";
 import type { SessionUser } from "@/lib/types";
@@ -11,6 +12,23 @@ import { aliasMergePlan, applyAliasMerges } from "./district-merge";
 
 function admin(user: SessionUser) {
   return user.role === "ADMIN";
+}
+
+function stateAllowed(user: SessionUser, stateId: string) {
+  if (!stateId || user.role !== "STATE_HEAD") return true;
+  return user.stateIds.includes(stateId);
+}
+
+function alertScope(user: SessionUser, kind = "", stateId = ""): Prisma.DeskAlertWhereInput {
+  const where: Prisma.DeskAlertWhereInput = { readAt: null };
+  if (kind) where.kind = kind;
+  if (user.role === "STATE_HEAD") {
+    const allowed = user.stateIds.length ? user.stateIds : ["none"];
+    where.OR = stateId ? [{ stateId }] : [{ stateId: { in: allowed } }, { stateId: null }];
+  } else if (stateId) {
+    where.stateId = stateId;
+  }
+  return where;
 }
 
 /** New desk routes live here so later QA fixes can be added without growing the main router. */
@@ -77,18 +95,47 @@ export async function release3(method: string, head: string, id: string | undefi
   }
   if (head === "alerts" && method === "GET") {
     if (user.role !== "ADMIN" && user.role !== "STATE_HEAD") return json({ error: "Not your desk" }, 403);
-    const stateLimit = user.role === "STATE_HEAD" ? { OR: [{ stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } }, { stateId: null }] } : {};
-    const [rows, unread] = await Promise.all([
-      prisma.deskAlert.findMany({ where: { ...stateLimit, readAt: null }, orderBy: { createdAt: "desc" }, take: 30 }),
-      prisma.deskAlert.count({ where: { ...stateLimit, readAt: null } }),
+    const kind = url.searchParams.get("kind") || "";
+    const stateId = url.searchParams.get("stateId") || "";
+    if (!stateAllowed(user, stateId)) return json({ error: "This state is outside your desk" }, 403);
+    const visible = alertScope(user);
+    const filtered = alertScope(user, kind, stateId);
+    const [rows, unread, matched, kinds, states] = await Promise.all([
+      prisma.deskAlert.findMany({ where: filtered, orderBy: { createdAt: "desc" }, take: 40 }),
+      prisma.deskAlert.count({ where: visible }),
+      prisma.deskAlert.count({ where: filtered }),
+      prisma.deskAlert.groupBy({ by: ["kind"], where: visible, _count: true }),
+      prisma.state.findMany({
+        where: user.role === "STATE_HEAD" ? { id: { in: user.stateIds.length ? user.stateIds : ["none"] } } : {},
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
     ]);
-    return json({ unread, rows });
+    return json({
+      unread,
+      matched,
+      rows,
+      kinds: kinds.map((row) => ({ kind: row.kind, count: row._count })),
+      states,
+    });
   }
   if (head === "alerts" && method === "POST") {
     if (user.role !== "ADMIN" && user.role !== "STATE_HEAD") return json({ error: "Not your desk" }, 403);
     const body = await readJson(req);
-    await prisma.deskAlert.update({ where: { id: String(body.id) }, data: { readAt: new Date() } });
-    return json({ ok: true });
+    if (body.all === true) {
+      const kind = body.kind ? String(body.kind) : "";
+      const stateId = body.stateId ? String(body.stateId) : "";
+      if (!stateAllowed(user, stateId)) return json({ error: "This state is outside your desk" }, 403);
+      const result = await prisma.deskAlert.updateMany({ where: alertScope(user, kind, stateId), data: { readAt: new Date() } });
+      return json({ ok: true, updated: result.count });
+    }
+    const id = String(body.id ?? "");
+    if (!id) return json({ error: "Choose an alert" }, 400);
+    const row = await prisma.deskAlert.findUnique({ where: { id } });
+    if (!row || row.readAt) return json({ ok: true, updated: 0 });
+    if (!stateAllowed(user, row.stateId ?? "")) return json({ error: "This state is outside your desk" }, 403);
+    await prisma.deskAlert.update({ where: { id }, data: { readAt: new Date() } });
+    return json({ ok: true, updated: 1 });
   }
   if (head === "assign" && method === "GET") {
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);

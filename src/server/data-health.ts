@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { nameReviewSql } from "@/lib/names";
 
 const OPEN = ["OPEN", "ASSIGNED", "REASSIGNED", "PENDING"];
 const MARKS = "?".repeat(3);
@@ -9,7 +10,7 @@ export async function dataHealth() {
   );
   const [missingDistrict, junkNames, questionNames, testUsers, testTickets, inactiveDistricts, proposals, pinRows] = await Promise.all([
     prisma.complaint.count({ where: { districtId: null, excludeFromMis: false, status: { in: OPEN } } }),
-    prisma.complaint.count({ where: { excludeFromMis: false, customerName: { in: ["ABC", "Test", "TEST", "asdf"] } } }),
+    prisma.$queryRaw<{ n: number }[]>`SELECT COUNT(*)::int AS n FROM "Complaint" WHERE "excludeFromMis" = false AND ${nameReviewSql()}`.then((rows) => Number(rows[0]?.n ?? 0)),
     prisma.complaint.count({ where: { customerName: { contains: MARKS } } }),
     prisma.user.count({ where: { OR: [{ email: { endsWith: "@oswal-test.invalid" } }, { isTest: true }] } }),
     prisma.complaint.count({ where: { OR: [{ qaFlag: true }, { customerName: { startsWith: "QA TEST" } }, { excludeFromMis: true }] } }),

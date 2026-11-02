@@ -25,7 +25,7 @@ export default function HealthPage() {
           <tbody>
             <tr><th>Duplicate district names</th><td>{data.duplicateDistrictNames}</td></tr>
             <tr><th>Open complaints missing a district</th><td>{data.missingDistrict}</td></tr>
-            <tr><th>Junk names</th><td>{data.junkNames}</td></tr>
+            <tr><th>Junk names</th><td>{data.junkNames} · <a href="/complaints?nameReview=1">Name needs review</a></td></tr>
             <tr><th>Names with question marks</th><td>{data.questionNames}</td></tr>
             <tr><th>Test users</th><td>{data.testUsers}</td></tr>
             <tr><th>Test tickets</th><td>{data.testTickets}</td></tr>

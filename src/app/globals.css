@@ -326,6 +326,38 @@ body, button, input, select, textarea { font-size: 13px; }
   border-bottom: 1px solid #e5e7eb;
 }
 .btn, .btn.line, .chip, input, select, textarea { border-radius: 4px; min-height: 32px; }
+.table-dense table { table-layout: fixed; width: 100%; }
+.table-dense col.col-check { width: 26px; }
+.table-dense col.col-ticket { width: 124px; }
+.table-dense col.col-date { width: 84px; }
+.table-dense col.col-customer { width: 156px; }
+.table-dense col.col-mobile { width: 104px; }
+.table-dense col.col-call { width: 88px; }
+.table-dense col.col-assigned { width: 76px; }
+.table-dense col.col-status { width: 158px; }
+.table-dense col.col-age { width: 40px; }
+.table-dense col.col-action { width: 58px; }
+.table-dense td.col-ticket,
+.table-dense th.col-ticket,
+.table-dense td.col-mobile,
+.table-dense th.col-mobile,
+.table-dense td.col-status,
+.table-dense th.col-status {
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.table-dense .col-customer,
+.table-dense .col-place,
+.table-dense .col-product { overflow: hidden; text-overflow: ellipsis; }
+.name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.name-line .ellipsis, .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.table-dense .name-review { flex: none; }
+.alert-pop { width: 420px; max-height: 70vh; overflow: auto; }
+.alert-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px; }
+.alert-tools select, .alert-tools .btn, .alert-row .btn { width: auto; min-height: 28px; height: 28px; padding: 0 8px; }
+.alert-pop a { width: auto; display: inline; }
+.alert-count { padding: 0 4px; }
 .btn { background: #02502f; color: #fff; }
 .btn.line { background: #fff; color: #111827; border: 1px solid #d1d5db; }
 .btn.signout { background: #02502f; color: #fff; border: 0; }

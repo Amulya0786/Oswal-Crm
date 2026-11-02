@@ -6,6 +6,7 @@ import { coverStatus } from "@/lib/history";
 import { labelOf, STATUSES, statusClass } from "@/lib/labels";
 import { formatDay } from "@/lib/time";
 import { MergeForm } from "@/components/merge-form";
+import { NameReviewChip } from "@/components/name-review";
 
 export const metadata = { title: "Customer" };
 
@@ -41,7 +42,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       <div className="page-head">
         <div>
           <p className="kicker">Customer 360</p>
-          <h1>{customer.name}</h1>
+          <h1>{customer.name} <NameReviewChip name={customer.name} /></h1>
           <p className="mono">{customer.phone}{customer.phones.length ? ` · also ${customer.phones.map((item) => item.phoneNorm).join(", ")}` : ""}</p>
         </div>
         <Link className="btn line" href="/customers">All customers</Link>

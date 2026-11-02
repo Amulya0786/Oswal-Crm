@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ListRow } from "@/server/query";
 import { labelOf, CALL_TYPES, STATUSES, statusClass } from "@/lib/labels";
+import { NameReviewChip } from "@/components/name-review";
 import { formatDay } from "@/lib/time";
 
 type Engineer = { id: string; name: string };
@@ -90,9 +91,34 @@ export function ComplaintTable({
       </div>
       <div className={`table-wrap ${dense ? "table-dense" : ""}`}>
         <table>
+          <colgroup>
+            <col className="col-check" />
+            <col className="col-ticket" />
+            <col className="col-date" />
+            <col className="col-customer" />
+            <col className="col-mobile" />
+            <col className="col-place" />
+            <col className="col-call" />
+            <col className="col-product" />
+            <col className="col-assigned" />
+            <col className="col-status" />
+            <col className="col-age" />
+            <col className="col-action" />
+          </colgroup>
           <thead>
             <tr>
-              <th></th><th>Comp. No</th><th>Book date</th><th>Customer</th><th>Mobile</th><th>District</th><th>Call type</th><th>Product</th><th>Assigned</th><th>Status</th><th>Age</th><th></th>
+              <th className="col-check"></th>
+              <th className="col-ticket">Comp. No</th>
+              <th className="col-date">Book date</th>
+              <th className="col-customer">Customer</th>
+              <th className="col-mobile">Mobile</th>
+              <th className="col-place">District</th>
+              <th className="col-call">Call type</th>
+              <th className="col-product">Product</th>
+              <th className="col-assigned">Assigned</th>
+              <th className="col-status">Status</th>
+              <th className="col-age">Age</th>
+              <th className="col-action"></th>
             </tr>
           </thead>
           <tbody>
@@ -101,18 +127,20 @@ export function ComplaintTable({
             )}
             {rows.map((row) => (
               <tr key={row.id}>
-                <td data-label=""><input type="checkbox" checked={picked.includes(row.id)} onChange={(event) => setPicked(event.target.checked ? [...picked, row.id] : picked.filter((id) => id !== row.id))} /></td>
-                <td data-label="Comp. No"><a className="mono" href={`/complaints/${row.ticketNo}`}>{row.ticketNo}</a>{row.serialPending && " · Serial pending"}{row.slaBreached && " · SLA"}{row.slaRisk && " · Risk"}{row.repeatFlag && " · Repeat"}</td>
-                <td data-label="Book date">{formatDay(row.bookDate)}</td>
-                <td data-label="Customer" title={`${row.customerName} · ${row.companyName ?? ""}`}>{row.customerName}<span className="sep"> · </span><span className="muted">{row.companyName}</span></td>
-                <td data-label="Mobile">{row.phone}</td>
-                <td data-label="District" title={`${row.districtName ?? ""} · ${row.stateName ?? ""}`}>{row.districtName}<span className="sep"> · </span><span className="muted">{row.stateName}</span></td>
-                <td data-label="Call type">{labelOf(CALL_TYPES, row.callType)}</td>
-                <td data-label="Product">{row.productDetails}</td>
-                <td data-label="Assigned" title={row.assignedName || "Unassigned"}>{row.assignedName || "Unassigned"}</td>
-                <td data-label="Status"><span className={statusClass(row.status)}>{labelOf(STATUSES, row.status)}</span></td>
-                <td data-label="Age" className="num">{row.ageDays}d</td>
-                <td data-label="Action">
+                <td className="col-check" data-label=""><input type="checkbox" checked={picked.includes(row.id)} onChange={(event) => setPicked(event.target.checked ? [...picked, row.id] : picked.filter((id) => id !== row.id))} /></td>
+                <td className="col-ticket" data-label="Comp. No" title={[row.serialPending && "Serial pending", row.slaBreached && "SLA", row.slaRisk && "Risk", row.repeatFlag && "Repeat"].filter(Boolean).join(" · ")}><a className="mono" href={`/complaints/${row.ticketNo}`}>{row.ticketNo}</a></td>
+                <td className="col-date" data-label="Book date">{formatDay(row.bookDate)}</td>
+                <td className="col-customer" data-label="Customer" title={`${row.customerName} · ${row.companyName ?? ""}`}>
+                  <span className="name-line"><NameReviewChip name={row.customerName} /><span className="ellipsis">{row.customerName}<span className="sep"> · </span><span className="muted">{row.companyName}</span></span></span>
+                </td>
+                <td className="col-mobile" data-label="Mobile">{row.phone}</td>
+                <td className="col-place" data-label="District" title={`${row.districtName ?? ""} · ${row.stateName ?? ""}`}><span className="ellipsis">{row.districtName}<span className="sep"> · </span><span className="muted">{row.stateName}</span></span></td>
+                <td className="col-call" data-label="Call type">{labelOf(CALL_TYPES, row.callType)}</td>
+                <td className="col-product" data-label="Product" title={row.productDetails ?? ""}><span className="ellipsis">{row.productDetails}</span></td>
+                <td className="col-assigned" data-label="Assigned" title={row.assignedName || "Unassigned"}><span className="ellipsis">{row.assignedName || "Unassigned"}</span></td>
+                <td className="col-status" data-label="Status"><span className={statusClass(row.status)}>{labelOf(STATUSES, row.status)}</span></td>
+                <td className="col-age num" data-label="Age">{row.ageDays}d</td>
+                <td className="col-action" data-label="Action">
                   <details>
                     <summary>Update</summary>
                     <div className="stack">

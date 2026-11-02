@@ -89,6 +89,7 @@ export type ComplaintFilters = {
   asOf?: string;
   channel?: string;
   includeTest?: string;
+  nameReview?: string;
   page?: number;
   pageSize?: number;
   cursor?: string;

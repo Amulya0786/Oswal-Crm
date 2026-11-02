@@ -188,19 +188,43 @@ export async function sweepAssignmentQueue() {
   const acceptHours = await settingNumber("ACCEPT_WAIT_HOURS", 2);
   const assignBefore = new Date(Date.now() - assignHours * 3600000);
   const acceptBefore = new Date(Date.now() - acceptHours * 3600000);
-  const waiting = await prisma.complaint.findMany({
-    where: { status: "OPEN", engineerId: null, excludeFromMis: false, bookDate: { lt: assignBefore } },
-    take: 200,
-    select: { id: true, ticketNo: true, stateId: true },
-  });
+  const batchSize = 500;
   let alerts = 0;
-  for (const row of waiting) {
-    const existing = await prisma.deskAlert.findFirst({ where: { complaintId: row.id, kind: "UNASSIGNED", readAt: null } });
-    if (existing) continue;
-    await prisma.deskAlert.create({
-      data: { kind: "UNASSIGNED", complaintId: row.id, stateId: row.stateId, message: `${row.ticketNo} has been unassigned for more than ${assignHours} hour(s)` },
+  let guard = "";
+  for (;;) {
+    // Imported Smartlogics backlog has no CREATED event, and new imports are source IMPORT.
+    // Oldest live bookings first. An open unassigned alert is not picked again.
+    const waiting = await prisma.$queryRaw<{ id: string; ticketNo: string; stateId: string | null }[]>`
+      SELECT c.id, c."ticketNo", c."stateId"
+      FROM "Complaint" c
+      WHERE c.status = 'OPEN'
+        AND c."engineerId" IS NULL
+        AND c."excludeFromMis" = false
+        AND c."bookDate" < ${assignBefore}
+        AND c.source <> 'IMPORT'
+        AND EXISTS (
+          SELECT 1 FROM "ComplaintEvent" e
+          WHERE e."complaintId" = c.id AND e.type = 'CREATED'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "DeskAlert" a
+          WHERE a."complaintId" = c.id AND a.kind = 'UNASSIGNED' AND a."readAt" IS NULL
+        )
+      ORDER BY c."bookDate" ASC, c.id ASC
+      LIMIT ${batchSize}
+    `;
+    if (!waiting.length || waiting[0].id === guard) break;
+    guard = waiting[0].id;
+    await prisma.deskAlert.createMany({
+      data: waiting.map((row) => ({
+        kind: "UNASSIGNED",
+        complaintId: row.id,
+        stateId: row.stateId,
+        message: `${row.ticketNo} has been unassigned for more than ${assignHours} hour(s)`,
+      })),
     });
-    alerts += 1;
+    alerts += waiting.length;
+    if (waiting.length < batchSize) break;
   }
   const stale = await prisma.complaint.findMany({
     where: { status: { in: ["ASSIGNED", "REASSIGNED"] }, acceptedAt: null, offeredAt: { lt: acceptBefore }, excludeFromMis: false },
@@ -218,7 +242,7 @@ export async function sweepAssignmentQueue() {
       data: { kind: "NOT_ACCEPTED", complaintId: row.id, stateId: row.stateId, message: `${row.ticketNo} was not accepted and is back in the queue` },
     });
   }
-  return { waiting: waiting.length, returned: stale.length, alerts };
+  return { waiting: alerts, returned: stale.length, alerts };
 }
 
 export async function respondToOffer(engineerId: string, complaintId: string, decision: "accept" | "reject", reason?: string | null) {
