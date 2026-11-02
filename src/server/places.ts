@@ -111,7 +111,7 @@ export async function mergeDistricts(fromId: string, toId: string, userId: strin
     await tx.auditLog.create({
       data: { userId, entity: "District", entityId: from.id, action: "MERGE", summary: `Merged ${from.name} into ${to.name}`, before: { id: from.id }, after: { into: to.id } },
     });
-  });
+  }, { timeout: 180000, maxWait: 20000 });
   return { ok: true, from: from.name, to: to.name };
 }
 

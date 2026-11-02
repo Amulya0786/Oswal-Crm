@@ -80,7 +80,7 @@ export default function PublicBookPage() {
     }).catch(() => null);
   }, []);
   return (
-    <main className="main" style={{ maxWidth: 720 }}>
+    <main className="main public-shell" style={{ maxWidth: 720 }}>
       <BrandLogo />
       <p className="kicker">Oswal Pumps Ltd · Karnal, Haryana</p>
       <div className="page-head">

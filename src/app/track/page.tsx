@@ -13,7 +13,7 @@ export default function TrackPage() {
   const [error, setError] = useState("");
 
   return (
-    <main className="main" style={{ maxWidth: 640 }}>
+    <main className="main public-shell" style={{ maxWidth: 640 }}>
       <BrandLogo />
       <h1>Track a complaint</h1>
       {step === "ask" && (

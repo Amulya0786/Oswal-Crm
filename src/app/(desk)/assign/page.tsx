@@ -52,7 +52,7 @@ export default function AssignPage() {
                 <td><a href={`/complaints/${row.id}`}>{row.ticketNo}</a>{row.seniorReview ? " · senior" : ""}</td>
                 <td>{row.customerName}</td>
                 <td>{row.districtName}, {row.stateName}</td>
-                <td>{row.suggestedName ?? "No suggestion"}</td>
+                <td><span className="suggest-card" title={row.suggestedName ?? "No suggestion"}>{row.suggestedName ?? "No suggestion"}</span></td>
                 <td><button className="btn" onClick={() => void assign([row.id])}>Confirm</button></td>
               </tr>
             ))}
