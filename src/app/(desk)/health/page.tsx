@@ -29,12 +29,17 @@ export default function HealthPage() {
             <tr><th>Names with question marks</th><td>{data.questionNames}</td></tr>
             <tr><th>Test users</th><td>{data.testUsers}</td></tr>
             <tr><th>Test tickets</th><td>{data.testTickets}</td></tr>
+            <tr><th>Pincodes with a block</th><td>{data.pincodes?.linkedBlock ?? 0}</td></tr>
+            <tr><th>Urban pincodes</th><td>{data.pincodes?.urban ?? 0}</td></tr>
+            <tr><th>District HQ, approximate</th><td>{data.pincodes?.approximate ?? 0}</td></tr>
+            <tr><th>Pincodes with no block</th><td>{data.pincodes?.none ?? 0}</td></tr>
           </tbody>
         </table>
       )}
       <div className="filters" style={{ marginTop: 16 }}>
         <button className="btn line" onClick={() => void run("/api/desk/health/purge")}>Purge QA dry run</button>
         <button className="btn" onClick={() => void run("/api/desk/health/purge", { apply: true })}>Purge QA</button>
+        <button className="btn line" onClick={() => void run("/api/desk/health/purge", { undo: true })}>Undo last purge</button>
         <button className="btn line" onClick={() => void run("/api/desk/health/aliases")}>Seed district aliases</button>
         <button className="btn line" onClick={() => void run("/api/desk/health/tehsils")}>Seed tehsils</button>
         <button className="btn line" onClick={() => void run("/api/desk/health/cities")}>Seed cities</button>

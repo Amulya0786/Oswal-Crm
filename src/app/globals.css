@@ -166,8 +166,11 @@ button { cursor: pointer; }
 .filters, .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .form-grid .stack, .form-grid input, .form-grid select { width: 100%; min-width: 0; }
-.table-wrap td, .table-wrap th { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 38px; }
-.table-wrap td .muted { display: inline; }
+.table-wrap { overflow: auto; }
+.table-wrap table { table-layout: fixed; width: 100%; }
+.table-wrap td, .table-wrap th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-dense th, .table-dense td { height: 38px; max-height: 38px; padding: 0 8px; line-height: 38px; font-size: 13px; }
+.table-wrap td .muted, .sep { display: inline; }
 .filters { margin-bottom: 12px; }
 input, select, textarea { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; height: 40px; }
 textarea { height: auto; padding: 10px 12px; }
@@ -179,7 +182,8 @@ textarea { height: auto; padding: 10px 12px; }
 .span-6 { grid-column: span 6; }
 .span-8 { grid-column: span 8; }
 .span-12 { grid-column: span 12; }
-.serial-actions { display: flex; gap: 8px; align-items: center; min-height: 40px; }
+.serial-actions { display: flex; gap: 8px; align-items: center; height: 40px; }
+.serial-actions .btn, .serial-actions .chip { height: 40px; margin: 0; }
 .step-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .step-tabs span { padding: 8px 0; color: var(--muted); border-bottom: 2px solid transparent; }
 .step-tabs span.on { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
@@ -198,7 +202,7 @@ th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--li
 th { position: sticky; top: 0; background: var(--paper-2); z-index: 1; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 th a { text-decoration: none; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.table-dense th, .table-dense td { padding: 6px 8px; font-size: 13px; }
+.table-dense th, .table-dense td { padding: 0 8px; height: 38px; line-height: 38px; font-size: 13px; vertical-align: middle; }
 .mono { font-family: var(--mono); font-size: 13px; }
 .stamp { display: inline-flex; border-radius: 999px; padding: 3px 8px; font-size: 12px; background: var(--paper-2); }
 .stamp.info { background: var(--info-bg); color: var(--info); }

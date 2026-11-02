@@ -561,6 +561,13 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     if (!user.caps.assign) throw new HttpError(403, "You cannot assign");
     const engineer = await prisma.engineer.findUnique({ where: { id: input.engineerId ?? "" } });
     if (!engineer || engineer.companyId !== current.companyId) throw new HttpError(400, "Choose a technician from this company");
+    if (user.role === "STATE_HEAD" && current.stateId && !user.stateIds.includes(current.stateId)) throw new HttpError(403, "This complaint is outside your state");
+    if (current.stateId && engineer.stateId && engineer.stateId !== current.stateId) {
+      await prisma.deskAlert.create({
+        data: { kind: "STATE_CHANGE", complaintId: current.id, stateId: current.stateId, engineerId: engineer.id, message: `${current.ticketNo} was not moved. ${engineer.name} is in another state.` },
+      });
+      throw new HttpError(400, "That technician is in another state");
+    }
     const reassigned = Boolean(current.engineerId);
     data.engineerId = engineer.id;
     data.assignedName = engineer.name;

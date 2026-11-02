@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 import { json, readJson } from "./http";
 import type { SessionUser } from "@/lib/types";
-import { dataHealth, purgeQa, repairName } from "./data-health";
+import { dataHealth, purgeQa, repairName, undoLastPurge } from "./data-health";
 import { mergeDistricts, searchPlaces, seedCities, seedDistrictAliases, seedTehsils } from "./places";
 import { changeEngineerState, confirmAssignment, reassignOpenComplaints, sweepAssignmentQueue } from "./assignment";
 import { allSettings, saveSetting } from "./settings";
@@ -25,6 +25,7 @@ export async function release3(method: string, head: string, id: string | undefi
   if (head === "health" && method === "POST" && id === "purge") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);
     const body = await readJson(req);
+    if (body.undo === true) return json(await undoLastPurge());
     return json(await purgeQa(body.apply === true));
   }
   if (head === "health" && method === "POST" && id === "repair-name") {
@@ -106,7 +107,7 @@ export async function release3(method: string, head: string, id: string | undefi
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
     const body = await readJson(req);
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
-    return json(await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null, body.reason ? String(body.reason) : null));
+    return json(await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null, body.reason ? String(body.reason) : null, { role: user.role, stateIds: user.stateIds }));
   }
   if (head === "engineers" && method === "POST" && id === "users") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);
@@ -130,7 +131,8 @@ export async function release3(method: string, head: string, id: string | undefi
         linked += 1;
         continue;
       }
-      const password = `Ow${Math.random().toString(36).slice(2, 10)}A1`;
+      const { randomBytes } = await import("crypto");
+      const password = `Ow${randomBytes(9).toString("base64url")}A1`;
       await prisma.user.create({
         data: {
           name: row.name,
@@ -271,7 +273,8 @@ async function importUsers(csv: string) {
     const email = row.email.toLowerCase();
     const existing = await prisma.user.findUnique({ where: { email } });
     const role = mapRole(row.role);
-    const password = `Ow${Math.random().toString(36).slice(2, 10)}A1`;
+    const { randomBytes } = await import("crypto");
+    const password = `Ow${randomBytes(9).toString("base64url")}A1`;
     const user = existing ?? await prisma.user.create({
       data: { name: row.name, email, role, passwordHash: await bcrypt.hash(password, 10), mustChangePassword: true },
     });

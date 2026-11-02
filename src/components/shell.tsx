@@ -69,7 +69,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/leave") return false;
       if (item.href === "/engineers") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       if (item.href === "/health") return user.caps.security;
-      if (item.href === "/map" || item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
+      if (item.href === "/map") return user.role === "ADMIN" || user.role === "STATE_HEAD" || user.role === "AREA_MANAGER";
+      if (item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;
     }),
   })).filter((group) => group.items.length);

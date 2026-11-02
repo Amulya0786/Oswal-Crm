@@ -5,6 +5,10 @@ import { BrandLogo } from "@/components/chrome";
 import { showToast } from "@/components/toast";
 import { compressImage, fileToDataUrl } from "@/lib/compress-image";
 
+const HI_STATE: Record<string, string> = {
+  "Andhra Pradesh": "आंध्र प्रदेश", "Arunachal Pradesh": "अरुणाचल प्रदेश", Assam: "असम", Bihar: "बिहार", Chhattisgarh: "छत्तीसगढ़", Goa: "गोवा", Gujarat: "गुजरात", Haryana: "हरियाणा", "Himachal Pradesh": "हिमाचल प्रदेश", Jharkhand: "झारखंड", Karnataka: "कर्नाटक", Kerala: "केरल", "Madhya Pradesh": "मध्य प्रदेश", Maharashtra: "महाराष्ट्र", Manipur: "मणिपुर", Meghalaya: "मेघालय", Mizoram: "मिज़ोरम", Nagaland: "नागालैंड", Odisha: "ओडिशा", Punjab: "पंजाब", Rajasthan: "राजस्थान", Sikkim: "सिक्किम", "Tamil Nadu": "तमिलनाडु", Telangana: "तेलंगाना", Tripura: "त्रिपुरा", "Uttar Pradesh": "उत्तर प्रदेश", Uttarakhand: "उत्तराखंड", "West Bengal": "पश्चिम बंगाल", Delhi: "दिल्ली", "Jammu and Kashmir": "जम्मू और कश्मीर", Ladakh: "लद्दाख", Chandigarh: "चंडीगढ़", "Andaman and Nicobar Islands": "अंडमान और निकोबार",
+};
+
 const COPY = {
   en: {
     title: "Register a complaint",
@@ -149,7 +153,7 @@ export default function PublicBookPage() {
         <label className="stack">{t.state} <span className="req">*</span>
           <select name="stateId" required value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictQuery(""); }}>
             <option value="">{t.state}</option>
-            {states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
+            {states.map((state) => <option key={state.id} value={state.id}>{lang === "hi" && HI_STATE[state.name] ? `${HI_STATE[state.name]} (${state.name})` : state.name}</option>)}
           </select>
         </label>
         <label className="stack">{t.pin} <span className="req">*</span><input name="pincode" inputMode="numeric" maxLength={6} pattern="[1-9][0-9]{5}" required onChange={async (event) => {

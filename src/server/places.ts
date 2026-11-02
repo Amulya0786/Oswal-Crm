@@ -28,9 +28,9 @@ function norm(value: string) {
 export async function searchPlaces(kind: string, q: string, stateId?: string | null, districtId?: string | null) {
   const query = q.trim();
   if (kind === "pin" && /^[1-9]\d{5}$/.test(query)) {
-    const pin = await prisma.pincode.findUnique({ where: { code: query }, include: { district: { include: { state: true } }, area: true } });
+    const pin = await prisma.pincode.findUnique({ where: { code: query }, include: { district: { include: { state: true } }, area: true, block: true, city: true } });
     if (!pin) return [];
-    return [{ id: pin.id, label: pin.code, districtId: pin.districtId, district: `${pin.district.name}, ${pin.district.state.name}`, stateId: pin.district.stateId, state: pin.district.state.name, areaId: pin.areaId, area: pin.area?.name ?? "" }];
+    return [{ id: pin.id, label: pin.code, districtId: pin.districtId, district: `${pin.district.name}, ${pin.district.state.name}`, stateId: pin.district.stateId, state: pin.district.state.name, areaId: pin.areaId, area: pin.area?.name ?? "", tehsilId: pin.blockId, tehsil: pin.block?.name ?? "", cityId: pin.cityId, city: pin.city?.name ?? "", urban: pin.urban }];
   }
   if (query.length < 2 && kind !== "tehsil" && kind !== "city") return [];
   if (kind === "district") {

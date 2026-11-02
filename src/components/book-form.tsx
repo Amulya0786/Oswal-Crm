@@ -307,7 +307,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
               const response = await fetch(`/api/desk/geo?kind=pin&q=${value}`);
               const body = await response.json();
               const hit = body.rows?.[0];
-              if (hit) { setDistrictId(hit.districtId); setStateId(hit.stateId); if (hit.areaId) { setAreaId(hit.areaId); setAreaQuery(hit.area); } }
+              if (hit) { setDistrictId(hit.districtId); setStateId(hit.stateId); if (hit.areaId) { setAreaId(hit.areaId); setAreaQuery(hit.area); } if (hit.tehsilId) setTehsilId(hit.tehsilId); }
             }
           }} /></label>
         </div>

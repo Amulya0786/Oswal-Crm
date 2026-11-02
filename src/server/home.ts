@@ -7,7 +7,7 @@ import type { SessionUser } from "@/lib/types";
 const DASH_TTL_MS = 5 * 60 * 1000;
 
 function cacheKey(user: SessionUser, scope: string, stateName?: string | null) {
-  return `dash4:${user.role}:${scope}:${stateName ?? ""}:${user.companyIds.join(".")}:${user.stateIds.join(".")}:${user.brandIds.join(".")}`;
+  return `dash5:${user.role}:${scope}:${stateName ?? ""}:${user.companyIds.join(".")}:${user.stateIds.join(".")}:${user.brandIds.join(".")}`;
 }
 
 export async function homeSnapshot(user: SessionUser, scope: string, stateName?: string | null) {
@@ -52,7 +52,7 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
         OR (c.status = 'HAPPY_CALLING' AND c."happyAt" >= ${today} AND c."happyAt" < ${tomorrow})
       ))::int AS closed,
       COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS pending,
-      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND COALESCE(c."callbackDueAt", c."slaDueAt") IS NOT NULL AND COALESCE(c."callbackDueAt", c."slaDueAt") <= ${now})::int AS overdue,
+      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= ${now})::int AS overdue,
       COUNT(*) FILTER (WHERE c."repeatFlag" = true AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS repeats,
       COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callbackDueAt" IS NOT NULL AND c."callbackDueAt" <= ${now} AND c."assignedAt" IS NULL)::int AS first_contact,
       COUNT(*) FILTER (WHERE c."feedbackPending" = true)::int AS happy,
@@ -87,11 +87,11 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     LIMIT 20
   `;
   const technicians = await prisma.$queryRaw<{ label: string; n: number }[]>`
-    SELECT COALESCE(c."assignedName", 'Unassigned') AS label, COUNT(*)::int AS n
+    SELECT COALESCE(NULLIF(btrim(c."assignedName"), ''), 'Unassigned') AS label, COUNT(*)::int AS n
     FROM "Complaint" c
     WHERE ${where} ${extra}
       AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING')
-      AND c."assignedName" IS NOT NULL
+      AND NULLIF(btrim(c."assignedName"), '') IS NOT NULL
     GROUP BY 1
     ORDER BY n DESC
     LIMIT 10

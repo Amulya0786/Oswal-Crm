@@ -29,7 +29,7 @@ export function capabilities(role: Role): Capabilities {
     settings: can(["ADMIN"]),
     export: can(["ADMIN", "AREA_MANAGER", "STATE_HEAD", "OEM_PARTNER"]),
     analytics: can(["ADMIN", "AREA_MANAGER", "STATE_HEAD"]),
-    allCompanies: can(["ADMIN"]),
+    allCompanies: can(["ADMIN", "CALL_CENTRE", "CALL_CLOSER"]),
   };
 }
 
@@ -104,6 +104,7 @@ export const getScope = cache(async () => {
   const cookie = (await cookies()).get("oswal_company")?.value;
   if (cookie === "all" && user.caps.allCompanies) return { user, scope: "all" };
   if (cookie && user.companyIds.includes(cookie)) return { user, scope: cookie };
+  // Call centre defaults to every company they belong to. A chosen company is the restriction.
   if (user.caps.allCompanies) return { user, scope: "all" };
   return { user, scope: user.companyIds[0] ?? "all" };
 });

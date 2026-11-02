@@ -208,10 +208,10 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
   }
   if (slug === "technician-performance") {
     const rows = await prisma.$queryRaw<{ technician: string; open: number; closed: number; overdue: number }[]>`
-      SELECT COALESCE(c."assignedName", 'Unassigned') AS technician,
+      SELECT COALESCE(NULLIF(btrim(c."assignedName"), ''), 'Unassigned') AS technician,
         COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
         COUNT(*) FILTER (WHERE c.status IN ('CLOSED','HAPPY_CALLING'))::int AS closed,
-        COUNT(*) FILTER (WHERE c."slaBreached" = true)::int AS overdue
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= NOW())::int AS overdue
       FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} GROUP BY 1 ORDER BY 2 DESC LIMIT 200`;
     return { ...meta, columns: cols(["technician", "open", "closed", "overdue"]), rows, total: rows.length, page: 1, pageSize: rows.length };
   }
@@ -219,7 +219,7 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
     const rows = await prisma.$queryRaw<{ state: string; district: string; open: number; overdue: number }[]>`
       SELECT COALESCE(c."stateName", 'Unknown') AS state, COALESCE(c."districtName", 'Unknown') AS district,
         COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
-        COUNT(*) FILTER (WHERE c."slaBreached" = true AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS overdue
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= NOW())::int AS overdue
       FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 300`;
     return { ...meta, columns: cols(["state", "district", "open", "overdue"]), rows, total: rows.length, page: 1, pageSize: rows.length };
   }

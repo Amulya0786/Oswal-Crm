@@ -40,7 +40,11 @@ export function ComplaintTable({
   const router = useRouter();
   const [picked, setPicked] = useState<string[]>([]);
   const [message, setMessage] = useState("");
-  const [dense, setDense] = useState(false);
+  const [dense, setDense] = useState(true);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("oswal-density");
+    if (saved === "comfortable") setDense(false);
+  }, []);
   const all = useMemo(() => rows.map((row) => row.id), [rows]);
 
   async function act(id: string, body: object) {
@@ -82,7 +86,7 @@ export function ComplaintTable({
         </div>
       )}
       <div className="table-toolbar">
-        <button type="button" className="btn line" onClick={() => setDense((value) => !value)}>{dense ? "Comfortable rows" : "Compact rows"}</button>
+        <button type="button" className="btn line" onClick={() => setDense((value) => { const next = !value; window.localStorage.setItem("oswal-density", next ? "compact" : "comfortable"); return next; })}>{dense ? "Comfortable rows" : "Compact rows"}</button>
       </div>
       <div className={`table-wrap ${dense ? "table-dense" : ""}`}>
         <table>
@@ -100,12 +104,12 @@ export function ComplaintTable({
                 <td data-label=""><input type="checkbox" checked={picked.includes(row.id)} onChange={(event) => setPicked(event.target.checked ? [...picked, row.id] : picked.filter((id) => id !== row.id))} /></td>
                 <td data-label="Comp. No"><a className="mono" href={`/complaints/${row.ticketNo}`}>{row.ticketNo}</a>{row.serialPending && " · Serial pending"}{row.slaBreached && " · SLA"}{row.slaRisk && " · Risk"}{row.repeatFlag && " · Repeat"}</td>
                 <td data-label="Book date">{formatDay(row.bookDate)}</td>
-                <td data-label="Customer">{row.customerName}<div className="muted">{row.companyName}</div></td>
+                <td data-label="Customer" title={`${row.customerName} · ${row.companyName ?? ""}`}>{row.customerName}<span className="sep"> · </span><span className="muted">{row.companyName}</span></td>
                 <td data-label="Mobile">{row.phone}</td>
-                <td data-label="District">{row.districtName}<div className="muted">{row.stateName}</div></td>
+                <td data-label="District" title={`${row.districtName ?? ""} · ${row.stateName ?? ""}`}>{row.districtName}<span className="sep"> · </span><span className="muted">{row.stateName}</span></td>
                 <td data-label="Call type">{labelOf(CALL_TYPES, row.callType)}</td>
                 <td data-label="Product">{row.productDetails}</td>
-                <td data-label="Assigned">{row.assignedName ?? "—"}</td>
+                <td data-label="Assigned" title={row.assignedName || "Unassigned"}>{row.assignedName || "Unassigned"}</td>
                 <td data-label="Status"><span className={statusClass(row.status)}>{labelOf(STATUSES, row.status)}</span></td>
                 <td data-label="Age" className="num">{row.ageDays}d</td>
                 <td data-label="Action">

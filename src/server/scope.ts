@@ -28,7 +28,12 @@ export function scopeSql(user: SessionUser, scope: string, alias?: string) {
   const parts: Prisma.Sql[] = [Prisma.sql`TRUE`];
   if (scope !== "all") parts.push(Prisma.sql`${col(alias, "companyId")} = ${scope}`);
   else if (user.role !== "ADMIN") {
-    parts.push(user.companyIds.length ? Prisma.sql`${col(alias, "companyId")} IN (${Prisma.join(user.companyIds)})` : Prisma.sql`FALSE`);
+    // Call centre and call closer see every company they belong to. No membership means no company restriction.
+    if (user.role === "CALL_CENTRE" || user.role === "CALL_CLOSER") {
+      if (user.companyIds.length) parts.push(Prisma.sql`${col(alias, "companyId")} IN (${Prisma.join(user.companyIds)})`);
+    } else {
+      parts.push(user.companyIds.length ? Prisma.sql`${col(alias, "companyId")} IN (${Prisma.join(user.companyIds)})` : Prisma.sql`FALSE`);
+    }
   }
   if (user.role === "TECHNICIAN") {
     parts.push(user.engineerId ? Prisma.sql`${col(alias, "engineerId")} = ${user.engineerId}` : Prisma.sql`FALSE`);

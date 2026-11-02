@@ -15,6 +15,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const requested = typeof sp.view === "string" ? sp.view : "";
   const stateName = typeof sp.state === "string" ? sp.state : "";
+  const denied = typeof sp.denied === "string" ? sp.denied : "";
   const view = user.role === "CALL_CENTRE"
     ? "desk"
     : user.role === "OEM_PARTNER"
@@ -39,6 +40,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <div>
       <ImportBanner />
+      {denied && <div className="banner">That page is not part of your desk.</div>}
       <div className="page-head">
         <div>
           <h1>{t(view === "desk" ? "Call centre" : view === "oem" ? "Brand desk" : view === "state" ? "State" : "All India")}</h1>
@@ -89,7 +91,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </section>
           <section className="panel">
             <p className="section-label">Ageing</p>
-            {!!ageing.length && <table><tbody>{ageing.map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>}
+            {!!ageing.length && <table><tbody>{["0-1 days", "2-3 days", "4-7 days", "8-15 days", "15+ days"].map((label) => {
+              const row = ageing.find((item) => item.label === label);
+              return <tr key={label}><td>{label}</td><td className="num">{formatNumber(row?.n ?? 0)}</td></tr>;
+            })}</tbody></table>}
             <p className="section-label">Pumps and Solar</p>
             {companies.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} open</p>)}
             <p>SLA overdue · {formatNumber(kpi.overdue)} · First contact overdue · {formatNumber(kpi.first_contact ?? 0)}</p>

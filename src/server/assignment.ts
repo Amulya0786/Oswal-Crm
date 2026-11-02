@@ -126,7 +126,7 @@ export async function queueAssignment(complaintId: string) {
   return { suggestion: top ?? null, auto: Boolean(auto && top) };
 }
 
-export async function confirmAssignment(ids: string[], engineerId?: string | null, reason?: string | null) {
+export async function confirmAssignment(ids: string[], engineerId?: string | null, reason?: string | null, actor?: { role: string; stateIds: string[] }) {
   const now = new Date();
   let updated = 0;
   for (const id of ids) {
@@ -136,6 +136,14 @@ export async function confirmAssignment(ids: string[], engineerId?: string | nul
     if (!chosen) continue;
     const engineer = await prisma.engineer.findUnique({ where: { id: chosen } });
     if (!engineer) continue;
+    if (actor?.role === "STATE_HEAD" && row.stateId && !actor.stateIds.includes(row.stateId)) continue;
+    if (engineer.companyId !== row.companyId) continue;
+    if (row.stateId && engineer.stateId && engineer.stateId !== row.stateId) {
+      await prisma.deskAlert.create({
+        data: { kind: "STATE_CHANGE", complaintId: row.id, stateId: row.stateId, engineerId: engineer.id, message: `${row.ticketNo} stayed in its state. ${engineer.name} belongs to another state.` },
+      });
+      continue;
+    }
     await prisma.complaint.update({
       where: { id },
       data: {
