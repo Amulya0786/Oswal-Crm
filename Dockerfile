@@ -15,7 +15,9 @@ RUN npx prisma generate && npm run build \
  && cp -a prisma .next/standalone/prisma \
  && cp -a scripts .next/standalone/scripts \
  && cp -a public/. .next/standalone/public/ \
- && cp -a .next/static/. .next/standalone/.next/static/
+ && cp -a .next/static/. .next/standalone/.next/static/ \
+ && mkdir -p .next/standalone/data \
+ && cp -a data/masters .next/standalone/data/masters
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0

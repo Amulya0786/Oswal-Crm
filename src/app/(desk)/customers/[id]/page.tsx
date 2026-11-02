@@ -30,6 +30,12 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     customer.complaints = customer.complaints.filter((row) => row.brandId && user.brandIds.includes(row.brandId));
     if (!customer.complaints.length) notFound();
   }
+  if (user.role === "TECHNICIAN") {
+    if (!user.engineerId) notFound();
+    const owns = await prisma.complaint.count({ where: { customerId: customer.id, engineerId: user.engineerId } });
+    if (!owns) notFound();
+    customer.complaints = customer.complaints.filter((row) => row.engineerId === user.engineerId);
+  }
   return (
     <div>
       <div className="page-head">

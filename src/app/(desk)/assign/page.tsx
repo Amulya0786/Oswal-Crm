@@ -6,11 +6,18 @@ export default function AssignPage() {
   const [rows, setRows] = useState<{ id: string; ticketNo: string; customerName: string; stateName: string | null; districtName: string | null; suggestedName: string | null; seniorReview: boolean }[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [message, setMessage] = useState("");
-  async function load() {
-    const response = await fetch("/api/desk/assign");
-    if (response.ok) setRows((await response.json()).rows ?? []);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  async function load(next = page) {
+    const response = await fetch(`/api/desk/assign?page=${next}`);
+    if (response.ok) {
+      const body = await response.json();
+      setRows(body.rows ?? []);
+      setPage(body.page ?? next);
+      setTotal(body.total ?? 0);
+    }
   }
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(1); }, []);
   async function assign(ids: string[]) {
     const response = await fetch("/api/desk/assign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
     const body = await response.json();
@@ -20,7 +27,8 @@ export default function AssignPage() {
   }
   return (
     <div>
-      <div className="page-head"><h1>To assign</h1>{picked.length > 0 && <button className="btn" onClick={() => void assign(picked)}>Assign selected</button>}</div>
+      <div className="page-head"><h1>To assign</h1><div className="filters">{picked.length > 0 && <button className="btn" onClick={() => void assign(picked)}>Assign selected</button>}<button className="btn line" type="button" disabled={page <= 1} onClick={() => void load(page - 1)}>Newer</button><button className="btn line" type="button" disabled={page * 50 >= total} onClick={() => void load(page + 1)}>Older</button></div></div>
+      <p className="muted">{total} open · page {page}</p>
       {message && <div className="banner">{message}</div>}
       <div className="table-wrap">
         <table>

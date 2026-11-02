@@ -95,7 +95,7 @@ export default function PublicBookPage() {
         setError("");
         const form = event.currentTarget;
         const data = Object.fromEntries(new FormData(form).entries());
-        const phone = String(data.phone ?? "").replace(/\D/g, "").slice(-10);
+        const phone = String(data.phone ?? "").replace(/\D/g, "");
         if (phone.length !== 10) {
           setError(lang === "hi" ? "10 अंकों का मोबाइल लिखें" : "Enter a 10-digit mobile");
           return;
@@ -138,7 +138,7 @@ export default function PublicBookPage() {
         <label className="stack">{t.name}<input name="customerName" required /></label>
         <label className="stack">{t.mobile} <span className="req">*</span><input name="phone" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required /></label>
         <button type="button" className="btn line" onClick={async () => {
-          const phone = String(new FormData(document.querySelector("form") as HTMLFormElement).get("phone") ?? "").replace(/\D/g, "").slice(-10);
+          const phone = String(new FormData(document.querySelector("form") as HTMLFormElement).get("phone") ?? "").replace(/\D/g, "");
           const response = await fetch("/api/public/otp-book", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) { setError(body.error ?? "Could not send the code"); showToast(body.error ?? "Could not send the code"); return; }

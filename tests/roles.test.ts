@@ -78,6 +78,24 @@ describe("roles", () => {
     expect(pathAllowed("OEM_PARTNER", "/masters")).toBe(false);
     expect(pathAllowed("OEM_PARTNER", "/reports")).toBe(true);
   });
+
+  it("hides unassigned work from a technician with no engineer link", () => {
+    expect(canSee(user("TECHNICIAN"), "all", row)).toBe(false);
+    expect(canSee(user("TECHNICIAN", { engineerId: "eng" }), "all", row)).toBe(false);
+    expect(canSee(user("TECHNICIAN", { engineerId: "eng" }), "all", { ...row, engineerId: null })).toBe(false);
+    expect(canSee(user("TECHNICIAN", { engineerId: "eng" }), "all", { ...row, engineerId: "eng" })).toBe(true);
+    expect(canSee(user("TECHNICIAN", { engineerId: "eng" }), "all", { ...row, engineerId: "other" })).toBe(false);
+  });
+
+  it("keeps data health and import on the admin desk", () => {
+    expect(pathAllowed("ADMIN", "/health")).toBe(true);
+    expect(pathAllowed("ADMIN", "/import")).toBe(true);
+    expect(pathAllowed("CALL_CENTRE", "/health")).toBe(false);
+    expect(pathAllowed("CALL_CENTRE", "/import")).toBe(false);
+    expect(pathAllowed("STATE_HEAD", "/health")).toBe(false);
+    expect(pathAllowed("TECHNICIAN", "/import")).toBe(false);
+    expect(pathAllowed("AREA_MANAGER", "/health/extra")).toBe(false);
+  });
 });
 
 describe("ticket numbers and webhook", () => {

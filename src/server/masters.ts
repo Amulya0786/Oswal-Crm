@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 import type { SessionUser } from "@/lib/types";
+import { normalizePhone } from "@/lib/mask";
 
 type Field = {
   key: string;
@@ -123,7 +124,7 @@ export async function saveMaster(user: SessionUser, def: MasterDef, input: Recor
     else data[field.key] = String(value).trim();
     if (field.required && (data[field.key] == null || data[field.key] === "")) throw new HttpError(400, `${field.label} is required`);
   }
-  if (def.key === "customers" && typeof data.phone === "string") data.phone = data.phone.replace(/\D/g, "").slice(-10);
+  if (def.key === "customers" && typeof data.phone === "string") data.phone = normalizePhone(data.phone);
   if (def.key === "engineers" && !data.kind) data.kind = "ENGINEER";
   try {
     const saved = id ? await model(def.model).update({ where: { id }, data }) : await model(def.model).create({ data });

@@ -6,6 +6,7 @@ import { dataHealth, purgeQa, repairName } from "./data-health";
 import { mergeDistricts, searchPlaces, seedCities, seedDistrictAliases, seedTehsils } from "./places";
 import { changeEngineerState, confirmAssignment, reassignOpenComplaints, sweepAssignmentQueue } from "./assignment";
 import { allSettings, saveSetting } from "./settings";
+import { repeatProgress, startRepeatRebuild } from "./repeats";
 
 function admin(user: SessionUser) {
   return user.role === "ADMIN";
@@ -64,13 +65,20 @@ export async function release3(method: string, head: string, id: string | undefi
   if (head === "assign" && method === "GET") {
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
     try { await sweepAssignmentQueue(); } catch { /* the queue still loads if the sweep cannot write */ }
-    const rows = await prisma.complaint.findMany({
-      where: { status: "OPEN", engineerId: null, excludeFromMis: false, ...(user.role === "STATE_HEAD" ? { stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } } : {}) },
-      orderBy: { bookDate: "asc" },
-      take: 50,
-      select: { id: true, ticketNo: true, customerName: true, stateName: true, districtName: true, callType: true, suggestedName: true, suggestedEngineerId: true, seniorReview: true, bookDate: true },
-    });
-    return json({ rows });
+    const pageSize = 50;
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
+    const where = { status: "OPEN" as const, engineerId: null, excludeFromMis: false, ...(user.role === "STATE_HEAD" ? { stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } } : {}) };
+    const [rows, total] = await Promise.all([
+      prisma.complaint.findMany({
+        where,
+        orderBy: [{ bookDate: "desc" }, { createdAt: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, ticketNo: true, customerName: true, stateName: true, districtName: true, callType: true, suggestedName: true, suggestedEngineerId: true, seniorReview: true, bookDate: true },
+      }),
+      prisma.complaint.count({ where }),
+    ]);
+    return json({ rows, page, pageSize, total });
   }
   if (head === "assign" && method === "POST") {
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
@@ -170,9 +178,13 @@ export async function release3(method: string, head: string, id: string | undefi
     if (!admin(user)) return json({ error: "Admins only" }, 403);
     return json(await mergeKnownBrands());
   }
+  if (head === "repeats" && method === "GET") {
+    if (!admin(user)) return json({ error: "Admins only" }, 403);
+    return json(await repeatProgress());
+  }
   if (head === "repeats" && method === "POST" && id === "rebuild") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);
-    return json(await rebuildRepeats());
+    return json(await startRepeatRebuild());
   }
   if (head === "users-import" && method === "POST") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);
@@ -255,23 +267,3 @@ async function mergeKnownBrands() {
   return { merged };
 }
 
-async function rebuildRepeats() {
-  const rows = await prisma.complaint.findMany({
-    orderBy: [{ bookDate: "asc" }, { createdAt: "asc" }],
-    select: { id: true, ticketNo: true, bookDate: true, status: true, serialNorm: true, phone: true, productId: true },
-    take: 50000,
-  });
-  const bySerial = new Map<string, typeof rows>();
-  const byMobile = new Map<string, typeof rows>();
-  let updated = 0;
-  for (const row of rows) {
-    const pool = row.serialNorm ? bySerial.get(row.serialNorm) ?? [] : byMobile.get(`${row.phone}|${row.productId ?? ""}`) ?? [];
-    const prior = [...pool].reverse().find((item) => item.bookDate < row.bookDate && (item.status === "CLOSED" || item.status === "HAPPY_CALLING"));
-    await prisma.complaint.update({ where: { id: row.id }, data: { repeatOfTicket: prior?.ticketNo ?? null, repeatFlag: Boolean(prior) } });
-    updated += 1;
-    pool.push(row);
-    if (row.serialNorm) bySerial.set(row.serialNorm, pool);
-    else byMobile.set(`${row.phone}|${row.productId ?? ""}`, pool);
-  }
-  return { updated };
-}

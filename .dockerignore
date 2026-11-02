@@ -3,7 +3,9 @@
 .git
 .next
 node_modules
-data
+data/*
+!data/masters
+!data/masters/**
 mobile
 coverage
 *.md

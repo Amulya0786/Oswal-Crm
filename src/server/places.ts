@@ -1,7 +1,25 @@
-import { readFile } from "fs/promises";
+import { access, readFile } from "fs/promises";
 import path from "path";
 import { prisma } from "./db";
 import { HttpError } from "./http";
+
+async function mastersFile(name: string) {
+  const candidates = [
+    path.join(process.cwd(), "data", "masters", name),
+    path.resolve(process.cwd(), "..", "..", "data", "masters", name),
+    path.join("/app", "data", "masters", name),
+    path.join("/app", ".next", "standalone", "data", "masters", name),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  throw new HttpError(500, `Master file ${name} is not in the app image`);
+}
 
 function norm(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -117,7 +135,7 @@ function parseCsv(text: string) {
 }
 
 export async function seedDistrictAliases() {
-  const file = await readFile(path.join(process.cwd(), "data/masters/district_cleanup.csv"), "utf8");
+  const file = await readFile(await mastersFile("district_cleanup.csv"), "utf8");
   const rows = parseCsv(file);
   let aliases = 0;
   const proposals = [];
@@ -142,40 +160,53 @@ export async function seedDistrictAliases() {
   return { aliases, proposals };
 }
 
-async function districtId(stateName: string, districtName: string) {
-  const state = await prisma.state.findFirst({ where: { name: { equals: stateName, mode: "insensitive" } } });
-  if (!state) return null;
-  const district = await prisma.district.findFirst({ where: { stateId: state.id, name: { equals: districtName, mode: "insensitive" } } });
-  return district?.id ?? null;
+async function districtIds() {
+  const districts = await prisma.district.findMany({ select: { id: true, name: true, state: { select: { name: true } } } });
+  const map = new Map<string, string>();
+  for (const district of districts) map.set(`${norm(district.state.name)}|${norm(district.name)}`, district.id);
+  return map;
 }
 
 export async function seedTehsils() {
-  const file = await readFile(path.join(process.cwd(), "data/masters/tehsils.csv"), "utf8");
+  const file = await readFile(await mastersFile("tehsils.csv"), "utf8");
   const rows = parseCsv(file);
-  let created = 0;
+  const districts = await districtIds();
+  const data: { districtId: string; name: string; lgdCode: string | null }[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
-    const id = await districtId(row.state, row.district);
-    if (!id || !row.tehsil) continue;
-    const existing = await prisma.tehsil.findUnique({ where: { districtId_name: { districtId: id, name: row.tehsil } } });
-    if (existing) continue;
-    await prisma.tehsil.create({ data: { districtId: id, name: row.tehsil, lgdCode: row.lgd_subdistrict_code || null } });
-    created += 1;
+    const districtId = districts.get(`${norm(row.state ?? "")}|${norm(row.district ?? "")}`);
+    const name = row.tehsil?.trim();
+    if (!districtId || !name) continue;
+    const key = `${districtId}|${norm(name)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    data.push({ districtId, name, lgdCode: row.lgd_subdistrict_code || null });
+  }
+  let created = 0;
+  for (let index = 0; index < data.length; index += 1000) {
+    created += (await prisma.tehsil.createMany({ data: data.slice(index, index + 1000), skipDuplicates: true })).count;
   }
   return { created, rows: rows.length };
 }
 
 export async function seedCities() {
-  const file = await readFile(path.join(process.cwd(), "data/masters/cities.csv"), "utf8");
+  const file = await readFile(await mastersFile("cities.csv"), "utf8");
   const rows = parseCsv(file);
-  let created = 0;
+  const districts = await districtIds();
+  const data: { districtId: string; name: string; kind: string | null; pincodes: string; lgdCode: string | null }[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
-    const name = row["city_town (urban local body)"] || row.city_town || row.city;
-    const id = await districtId(row.state, row.district);
-    if (!id || !name) continue;
-    const existing = await prisma.city.findUnique({ where: { districtId_name: { districtId: id, name } } });
-    if (existing) continue;
-    await prisma.city.create({ data: { districtId: id, name, kind: row.type || null, pincodes: row.pincodes || "", lgdCode: row.lgd_local_body_code || null } });
-    created += 1;
+    const name = (row["city_town (urban local body)"] || row.city_town || row.city || "").trim();
+    const districtId = districts.get(`${norm(row.state ?? "")}|${norm(row.district ?? "")}`);
+    if (!districtId || !name) continue;
+    const key = `${districtId}|${norm(name)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    data.push({ districtId, name, kind: row.type || null, pincodes: row.pincodes || "", lgdCode: row.lgd_local_body_code || null });
+  }
+  let created = 0;
+  for (let index = 0; index < data.length; index += 1000) {
+    created += (await prisma.city.createMany({ data: data.slice(index, index + 1000), skipDuplicates: true })).count;
   }
   return { created, rows: rows.length };
 }

@@ -14,11 +14,14 @@ export default async function CustomersPage() {
   const brandLimit = user.role === "OEM_PARTNER"
     ? { complaints: { some: { brandId: { in: user.brandIds.length ? user.brandIds : ["none"] } } } }
     : {};
+  const ownCalls = user.role === "TECHNICIAN"
+    ? { complaints: { some: { engineerId: user.engineerId || "none" } } }
+    : {};
   const where = scope === "all"
     ? user.role === "ADMIN"
-      ? { mergedIntoId: null, ...brandLimit }
-      : { mergedIntoId: null, OR: [{ companyId: { in: user.companyIds } }, { complaints: { some: { companyId: { in: user.companyIds } } } }], ...brandLimit }
-    : { mergedIntoId: null, OR: [{ companyId: scope }, { complaints: { some: { companyId: scope } } }], ...brandLimit };
+      ? { mergedIntoId: null, ...brandLimit, ...ownCalls }
+      : { mergedIntoId: null, OR: [{ companyId: { in: user.companyIds } }, { complaints: { some: { companyId: { in: user.companyIds } } } }], ...brandLimit, ...ownCalls }
+    : { mergedIntoId: null, OR: [{ companyId: scope }, { complaints: { some: { companyId: scope } } }], ...brandLimit, ...ownCalls };
   const customers = await prisma.customer.findMany({
     where,
     orderBy: { name: "asc" },

@@ -19,6 +19,7 @@ import { storeAudio, transcribe } from "@/server/speech";
 import { DEFAULT_SLABS, DEFAULT_WEIGHTS, incentiveFor, performanceScore } from "@/lib/phase3";
 import { issueReportKey } from "@/lib/report-key";
 import { normalizePhone, displayPhone } from "@/lib/mask";
+import { passwordProblem } from "@/lib/password";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 
 async function actor() {
@@ -213,7 +214,12 @@ async function route(method: string, slug: string[], req: Request) {
     const [complaints, customers, engineers] = await Promise.all([
       listComplaints(user, scope, { q, pageSize: 8 }),
       prisma.customer.findMany({
-        where: { mergedIntoId: null, ...companyWhere, OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }] },
+        where: {
+          mergedIntoId: null,
+          ...companyWhere,
+          ...(user.role === "TECHNICIAN" ? { complaints: { some: { engineerId: user.engineerId || "none" } } } : {}),
+          OR: [{ name: { contains: q, mode: "insensitive" } }, { phone: { contains: q } }],
+        },
         take: 6,
         select: { id: true, name: true, phone: true, companyId: true, district: { select: { name: true } } },
       }),
@@ -343,6 +349,7 @@ async function route(method: string, slug: string[], req: Request) {
         mergedIntoId: null,
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(scope === "all" || user.role === "ADMIN" ? {} : { companyId: scope === "all" ? undefined : scope }),
+        ...(user.role === "TECHNICIAN" ? { complaints: { some: { engineerId: user.engineerId || "none" } } } : {}),
       },
       orderBy: { id: "asc" },
       take: 50,
@@ -518,13 +525,18 @@ async function route(method: string, slug: string[], req: Request) {
   if (head === "users" && method === "POST") {
     if (!user.caps.security) return json({ error: "Admins only" }, 403);
     const body = await readJson(req);
+    const password = String(body.password ?? "").trim();
+    if (!password) return json({ error: "Enter a password" }, 400);
+    const problem = passwordProblem(password, body.name, body.phone, body.email);
+    if (problem) return json({ error: problem }, 400);
     const bcrypt = await import("bcryptjs");
     const created = await prisma.user.create({
       data: {
         name: body.name,
         email: String(body.email).toLowerCase(),
-        passwordHash: await bcrypt.hash(String(body.password || "Welcome@123"), 8),
+        passwordHash: await bcrypt.hash(password, 10),
         role: body.role,
+        mustChangePassword: false,
         phone: body.phone || null,
         memberships: { create: (body.companyIds ?? []).map((companyId: string) => ({ companyId })) },
         states: { create: (body.stateIds ?? []).map((stateId: string) => ({ stateId })) },

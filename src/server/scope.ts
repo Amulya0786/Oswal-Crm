@@ -64,7 +64,7 @@ export function canSee(
 ) {
   if (scope !== "all" && row.companyId !== scope) return false;
   if (user.role !== "ADMIN" && !user.companyIds.includes(row.companyId)) return false;
-  if (user.role === "TECHNICIAN" && row.engineerId !== user.engineerId) return false;
+  if (user.role === "TECHNICIAN" && (!user.engineerId || !row.engineerId || row.engineerId !== user.engineerId)) return false;
   if (user.role === "DEALER" && row.createdById !== user.id) return false;
   if (user.role === "OEM_PARTNER" && (!row.brandId || !user.brandIds.includes(row.brandId))) return false;
   if (user.role === "AREA_MANAGER" && (!row.districtId || !user.districtIds.includes(row.districtId))) return false;
