@@ -8,6 +8,7 @@ import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { DESK_LABEL, type FieldLang } from "@/lib/i18n";
 import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
+import { AlertBell } from "@/components/alert-bell";
 import { showToast } from "@/components/toast";
 
 const GROUPS = [
@@ -156,6 +157,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             document.cookie = `oswal_lang=${next}; path=/; max-age=31536000`;
             document.documentElement.lang = next;
           }}>{lang === "hi" ? "EN" : "हिंदी"}</button>
+          {(user.role === "ADMIN" || user.role === "STATE_HEAD") && <AlertBell />}
           <ThemeToggle />
           <button type="button" className="btn signout" style={{ display: "inline-flex" }} onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>{DESK_LABEL[lang]["Sign out"]}</button>
           <span className="live-dot" title="Live" />

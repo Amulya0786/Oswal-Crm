@@ -537,7 +537,9 @@ function buildTimeline(row: {
 export async function updateComplaint(user: SessionUser, scope: string, id: string, raw: unknown) {
   const input = actionSchema.parse(raw);
   const current = await prisma.complaint.findUnique({ where: { id }, include: { company: true } });
-  if (!current || !canSee(user, scope, current)) throw new HttpError(404, "Complaint not found");
+  if (!current) throw new HttpError(404, "Complaint not found");
+  if (user.role === "STATE_HEAD" && current.stateId && !user.stateIds.includes(current.stateId)) throw new HttpError(403, "This complaint is outside your state");
+  if (!canSee(user, scope, current)) throw new HttpError(404, "Complaint not found");
   if (input.version != null && input.version !== current.version) throw new HttpError(409, "This complaint was updated in another tab. Reload it.");
   const now = new Date();
   const data: Record<string, unknown> = {};

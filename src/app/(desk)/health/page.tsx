@@ -33,6 +33,8 @@ export default function HealthPage() {
             <tr><th>Urban pincodes</th><td>{data.pincodes?.urban ?? 0}</td></tr>
             <tr><th>District HQ, approximate</th><td>{data.pincodes?.approximate ?? 0}</td></tr>
             <tr><th>Pincodes with no block</th><td>{data.pincodes?.none ?? 0}</td></tr>
+            <tr><th>Also urban among linked blocks</th><td>{data.pincodes?.overlapLinkedUrban ?? 0}</td></tr>
+            <tr><th>Also urban among approximate</th><td>{data.pincodes?.overlapApproximateUrban ?? 0}</td></tr>
           </tbody>
         </table>
       )}

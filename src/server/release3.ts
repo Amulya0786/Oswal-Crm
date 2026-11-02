@@ -75,6 +75,21 @@ export async function release3(method: string, head: string, id: string | undefi
     const body = await readJson(req);
     return json(await mergeDistricts(String(body.fromId), String(body.toId), user.id));
   }
+  if (head === "alerts" && method === "GET") {
+    if (user.role !== "ADMIN" && user.role !== "STATE_HEAD") return json({ error: "Not your desk" }, 403);
+    const stateLimit = user.role === "STATE_HEAD" ? { OR: [{ stateId: { in: user.stateIds.length ? user.stateIds : ["none"] } }, { stateId: null }] } : {};
+    const [rows, unread] = await Promise.all([
+      prisma.deskAlert.findMany({ where: { ...stateLimit, readAt: null }, orderBy: { createdAt: "desc" }, take: 30 }),
+      prisma.deskAlert.count({ where: { ...stateLimit, readAt: null } }),
+    ]);
+    return json({ unread, rows });
+  }
+  if (head === "alerts" && method === "POST") {
+    if (user.role !== "ADMIN" && user.role !== "STATE_HEAD") return json({ error: "Not your desk" }, 403);
+    const body = await readJson(req);
+    await prisma.deskAlert.update({ where: { id: String(body.id) }, data: { readAt: new Date() } });
+    return json({ ok: true });
+  }
   if (head === "assign" && method === "GET") {
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
     try { await sweepAssignmentQueue(); } catch { /* the queue still loads if the sweep cannot write */ }
@@ -107,7 +122,11 @@ export async function release3(method: string, head: string, id: string | undefi
     if (!user.caps.assign) return json({ error: "You cannot assign" }, 403);
     const body = await readJson(req);
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
-    return json(await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null, body.reason ? String(body.reason) : null, { role: user.role, stateIds: user.stateIds }));
+    const result = await confirmAssignment(ids, body.engineerId ? String(body.engineerId) : null, body.reason ? String(body.reason) : null, { role: user.role, stateIds: user.stateIds });
+    if (result.updated === 0 && result.skipped.length && result.skipped.every((row) => row.reason === "Outside your state")) {
+      return json({ error: "This complaint is outside your state", skipped: result.skipped }, 403);
+    }
+    return json(result);
   }
   if (head === "engineers" && method === "POST" && id === "users") {
     if (!admin(user)) return json({ error: "Admins only" }, 403);

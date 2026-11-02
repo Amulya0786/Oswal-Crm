@@ -129,19 +129,24 @@ export async function queueAssignment(complaintId: string) {
 export async function confirmAssignment(ids: string[], engineerId?: string | null, reason?: string | null, actor?: { role: string; stateIds: string[] }) {
   const now = new Date();
   let updated = 0;
+  const skipped: { ticketNo: string; reason: string }[] = [];
   for (const id of ids) {
     const row = await prisma.complaint.findUnique({ where: { id }, include: { company: true } });
-    if (!row) continue;
+    if (!row) { skipped.push({ ticketNo: id, reason: "Not found" }); continue; }
     const chosen = engineerId || row.suggestedEngineerId;
-    if (!chosen) continue;
+    if (!chosen) { skipped.push({ ticketNo: row.ticketNo, reason: "No technician chosen" }); continue; }
     const engineer = await prisma.engineer.findUnique({ where: { id: chosen } });
-    if (!engineer) continue;
-    if (actor?.role === "STATE_HEAD" && row.stateId && !actor.stateIds.includes(row.stateId)) continue;
-    if (engineer.companyId !== row.companyId) continue;
+    if (!engineer) { skipped.push({ ticketNo: row.ticketNo, reason: "Technician not found" }); continue; }
+    if (actor?.role === "STATE_HEAD" && row.stateId && !actor.stateIds.includes(row.stateId)) {
+      skipped.push({ ticketNo: row.ticketNo, reason: "Outside your state" });
+      continue;
+    }
+    if (engineer.companyId !== row.companyId) { skipped.push({ ticketNo: row.ticketNo, reason: "Technician is in another company" }); continue; }
     if (row.stateId && engineer.stateId && engineer.stateId !== row.stateId) {
       await prisma.deskAlert.create({
         data: { kind: "STATE_CHANGE", complaintId: row.id, stateId: row.stateId, engineerId: engineer.id, message: `${row.ticketNo} stayed in its state. ${engineer.name} belongs to another state.` },
       });
+      skipped.push({ ticketNo: row.ticketNo, reason: "Technician is in another state" });
       continue;
     }
     await prisma.complaint.update({
@@ -175,7 +180,7 @@ export async function confirmAssignment(ids: string[], engineerId?: string | nul
     });
     updated += 1;
   }
-  return { updated };
+  return { updated, skipped };
 }
 
 export async function sweepAssignmentQueue() {

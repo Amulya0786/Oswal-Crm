@@ -7,7 +7,7 @@ export async function dataHealth() {
   const dupNames = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
     `SELECT COUNT(*)::int AS n FROM (SELECT lower("name"), "stateId" FROM "District" WHERE active = true GROUP BY 1, 2 HAVING COUNT(*) > 1) s`,
   );
-  const [missingDistrict, junkNames, questionNames, testUsers, testTickets, inactiveDistricts, proposals, pins, linkedBlock, urban, approximate, uncovered] = await Promise.all([
+  const [missingDistrict, junkNames, questionNames, testUsers, testTickets, inactiveDistricts, proposals, pinRows] = await Promise.all([
     prisma.complaint.count({ where: { districtId: null, excludeFromMis: false, status: { in: OPEN } } }),
     prisma.complaint.count({ where: { excludeFromMis: false, customerName: { in: ["ABC", "Test", "TEST", "asdf"] } } }),
     prisma.complaint.count({ where: { customerName: { contains: MARKS } } }),
@@ -15,11 +15,16 @@ export async function dataHealth() {
     prisma.complaint.count({ where: { OR: [{ qaFlag: true }, { customerName: { startsWith: "QA TEST" } }, { excludeFromMis: true }] } }),
     prisma.district.count({ where: { active: false } }),
     prisma.placeAlias.findMany({ include: { district: { select: { name: true } } }, take: 200, orderBy: { alias: "asc" } }),
-    prisma.pincode.count(),
-    prisma.pincode.count({ where: { blockId: { not: null }, blockApproximate: false, urban: false } }),
-    prisma.pincode.count({ where: { urban: true } }),
-    prisma.pincode.count({ where: { blockApproximate: true } }),
-    prisma.pincode.count({ where: { blockId: null } }),
+    prisma.$queryRaw<{ total: number; linked: number; urban: number; approximate: number; none: number; linked_and_urban: number; approximate_and_urban: number }[]>`
+      SELECT count(*)::int AS total,
+        count(*) FILTER (WHERE "blockId" IS NOT NULL AND "blockApproximate" = false)::int AS linked,
+        count(*) FILTER (WHERE urban = true AND ("blockId" IS NULL OR "blockApproximate" = true))::int AS urban,
+        count(*) FILTER (WHERE "blockApproximate" = true AND urban = false)::int AS approximate,
+        count(*) FILTER (WHERE "blockId" IS NULL AND urban = false)::int AS none,
+        count(*) FILTER (WHERE "blockId" IS NOT NULL AND "blockApproximate" = false AND urban = true)::int AS linked_and_urban,
+        count(*) FILTER (WHERE "blockApproximate" = true AND urban = true)::int AS approximate_and_urban
+      FROM "Pincode"
+    `,
   ]);
   return {
     duplicateDistrictNames: Number(dupNames[0]?.n ?? 0),
@@ -30,7 +35,15 @@ export async function dataHealth() {
     testTickets,
     inactiveDistricts,
     mergeList: proposals.map((row) => ({ alias: row.alias, state: row.stateName, into: row.district.name })),
-    pincodes: { total: pins, linkedBlock, urban, approximate, none: uncovered },
+    pincodes: {
+      total: Number(pinRows[0]?.total ?? 0),
+      linkedBlock: Number(pinRows[0]?.linked ?? 0),
+      urban: Number(pinRows[0]?.urban ?? 0),
+      approximate: Number(pinRows[0]?.approximate ?? 0),
+      none: Number(pinRows[0]?.none ?? 0),
+      overlapLinkedUrban: Number(pinRows[0]?.linked_and_urban ?? 0),
+      overlapApproximateUrban: Number(pinRows[0]?.approximate_and_urban ?? 0),
+    },
   };
 }
 
@@ -47,7 +60,6 @@ async function purgeWhere() {
     where: {
       OR: [
         { qaFlag: true },
-        { customer: { isTest: true } },
         ...(ids.length ? [{ createdById: { in: ids } }] : []),
       ],
     },
@@ -58,10 +70,11 @@ export async function purgeQa(apply: boolean) {
   const { ids, where } = await purgeWhere();
   const rows = await prisma.complaint.findMany({
     where,
-    select: { id: true, ticketNo: true, status: true, finalStatus: true, closedAt: true, excludeFromMis: true, qaFlag: true, cancelReason: true },
+    select: { id: true, ticketNo: true, status: true, finalStatus: true, closedAt: true, excludeFromMis: true, qaFlag: true, cancelReason: true, createdById: true },
     orderBy: { ticketNo: "asc" },
     take: 500,
   });
+  const reasons = rows.map((row) => ({ ticketNo: row.ticketNo, reason: row.qaFlag ? "qaFlag" : "created by a test user" }));
   const tickets = await prisma.complaint.count({ where });
   const customers = await prisma.customer.count({ where: { isTest: true } });
   if (apply && tickets) {
@@ -73,7 +86,7 @@ export async function purgeQa(apply: boolean) {
     await prisma.complaint.updateMany({ where, data: { excludeFromMis: true, qaFlag: true, status: "CANCELLED", finalStatus: "Cancelled", cancelReason: "QA data removed from live counts" } });
     if (ids.length) await prisma.user.updateMany({ where: { id: { in: ids } }, data: { active: false, isTest: true } });
   }
-  return { dryRun: !apply, users: ids.length, tickets, customers, list: rows.map((row) => row.ticketNo) };
+  return { dryRun: !apply, users: ids.length, tickets, customers, list: reasons };
 }
 
 export async function undoLastPurge() {

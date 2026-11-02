@@ -27,7 +27,8 @@ export default function AssignPage() {
   async function assign(ids: string[]) {
     const response = await fetch("/api/desk/assign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, reason }) });
     const body = await response.json();
-    setMessage(response.ok ? `Assigned ${body.updated}` : body.error);
+    const skips = Array.isArray(body.skipped) ? body.skipped.map((row: { ticketNo: string; reason: string }) => `${row.ticketNo}: ${row.reason}`).join("; ") : "";
+    setMessage(response.ok ? `Assigned ${body.updated ?? 0}${skips ? `. Skipped ${skips}` : ""}` : body.error ?? "Could not assign");
     setPicked([]);
     await load();
   }
