@@ -197,10 +197,13 @@ model Pincode {
   code       String   @unique
   districtId String
   areaId     String?
+  blockId    String?
   district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
   area       Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  block      Tehsil?  @relation(fields: [blockId], references: [id], onDelete: SetNull)
 
   @@index([districtId])
+  @@index([blockId])
 }
 
 model Category {
@@ -1029,9 +1032,11 @@ model Tehsil {
   lgdCode    String?
   active     Boolean  @default(true)
   district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  pincodes   Pincode[]
 
   @@unique([districtId, name])
   @@index([districtId])
+  @@index([lgdCode])
 }
 
 model City {

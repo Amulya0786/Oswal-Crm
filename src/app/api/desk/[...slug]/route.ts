@@ -63,7 +63,11 @@ export async function DELETE(req: Request, context: { params: Promise<{ slug: st
 async function route(method: string, slug: string[], req: Request) {
   const url = new URL(req.url);
   const [head, id, extra] = slug;
-  const viaImportToken = head === "import" && importTokenOk(req.headers.get("x-import-token"));
+  const presentedImportToken = req.headers.get("x-import-token");
+  if (head === "import" && presentedImportToken && !importTokenOk(presentedImportToken)) {
+    return json({ error: "Bad import token" }, 401);
+  }
+  const viaImportToken = head === "import" && importTokenOk(presentedImportToken);
   const session = (await actor()) ?? (viaImportToken ? await userForImport() : null);
   if (!session) return json({ error: "Sign in" }, 401);
   if (!viaImportToken) rejectTemporaryPassword(session.user);
@@ -387,7 +391,12 @@ async function route(method: string, slug: string[], req: Request) {
     if (method === "DELETE") return json(await deleteMaster(user, def, url.searchParams.get("id") || ""));
   }
 
-  if (head === "import" && method === "POST" && !user.caps.security) return json({ error: "Admins only" }, 403);
+  if (head === "import" && method === "GET" && id === "stats") {
+    if (!viaImportToken) return json({ error: "Import token required" }, 401);
+    const { importStats } = await import("@/server/import-stats");
+    return json(await importStats(user));
+  }
+  if (head === "import" && method === "POST" && !viaImportToken && !user.caps.security) return json({ error: "Admins only" }, 403);
   if (head === "import" && method === "POST" && id === "preview") {
     const form = await req.formData();
     const file = form.get("file");
@@ -395,7 +404,15 @@ async function route(method: string, slug: string[], req: Request) {
     const bytes = Buffer.from(await file.arrayBuffer());
     return json(await previewImport(file.name, bytes));
   }
-  if (head === "import" && method === "POST" && id === "commit") return json(await commitImport(user, await readJson(req)));
+  if (head === "import" && method === "POST" && id === "commit") {
+    const body = await readJson(req);
+    if (body.entity === "pincode-blocks") {
+      if (!viaImportToken) return json({ error: "Import token required" }, 401);
+      const { linkPincodeBlocks } = await import("@/server/pincode-blocks");
+      return json(await linkPincodeBlocks(Array.isArray(body.rows) ? body.rows : []));
+    }
+    return json(await commitImport(user, body));
+  }
 
   if (head === "exports" && method === "GET") {
     const jobs = await prisma.exportJob.findMany({ where: user.caps.security ? {} : { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 });

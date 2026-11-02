@@ -13,8 +13,17 @@ const PUBLIC_PREFIXES = [
   "/chat",
 ];
 
+/** The import client has no session cookie. The route checks x-import-token. */
+export function importRequestWithoutSession(method: string, pathname: string, hasImportToken: boolean) {
+  if (!hasImportToken) return false;
+  if (method === "GET" && pathname === "/api/desk/import/stats") return true;
+  if (method !== "POST") return false;
+  return pathname === "/api/desk/import/preview" || pathname === "/api/desk/import/commit";
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (importRequestWithoutSession(request.method, pathname, Boolean(request.headers.get("x-import-token")))) return NextResponse.next();
   if (PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return NextResponse.next();
   if (
     pathname.startsWith("/_next") ||

@@ -270,26 +270,35 @@ async function importComplaints(user: SessionUser, rows: Record<string, string>[
       const serialChecked = rawSerial ? validateSerial(rawSerial) : null;
       const serialOk = Boolean(serialChecked && serialChecked.ok && serialChecked.serial);
       const serialNorm = serialOk && serialChecked && serialChecked.ok ? serialChecked.serial : null;
-      const customerKey = `${company.id}|${phone}`;
+      const customerKey = phone;
       let customer = customerCache.get(customerKey);
       if (!customer) {
-        customer = await prisma.customer.findFirst({ where: { companyId: company.id, phone }, select: { id: true } })
-          ?? await prisma.customer.create({
-            data: {
-              companyId: company.id,
-              name: row.customerName,
-              phone,
-              phoneNorm: phone,
-              nameNorm: row.customerName.trim().toLowerCase().replace(/\s+/g, " "),
-              address: row.address || null,
-              stateId: state?.id,
-              districtId: district?.id,
-              areaId: area?.id,
-              pincode: row.pincode || null,
-              altPhone: row.altPhone ? normalizePhone(row.altPhone) : null,
-            },
-            select: { id: true },
-          });
+        const found = await prisma.customer.findFirst({ where: { OR: [{ phoneNorm: phone }, { phone }] }, select: { id: true } });
+        if (found) customer = found;
+        else {
+          try {
+            customer = await prisma.customer.create({
+              data: {
+                companyId: company.id,
+                name: row.customerName,
+                phone,
+                phoneNorm: phone,
+                nameNorm: row.customerName.trim().toLowerCase().replace(/\s+/g, " "),
+                address: row.address || null,
+                stateId: state?.id,
+                districtId: district?.id,
+                areaId: area?.id,
+                pincode: row.pincode || null,
+                altPhone: row.altPhone ? normalizePhone(row.altPhone) : null,
+              },
+              select: { id: true },
+            });
+          } catch {
+            const again = await prisma.customer.findFirst({ where: { OR: [{ phoneNorm: phone }, { phone }] }, select: { id: true } });
+            if (!again) throw new Error("Customer mobile is already used");
+            customer = again;
+          }
+        }
         customerCache.set(customerKey, customer);
       }
       const assetKey = `${company.id}|${customer.id}|${serialNorm ?? ""}|${(row.productDetails || product?.name || "").toLowerCase()}`;
