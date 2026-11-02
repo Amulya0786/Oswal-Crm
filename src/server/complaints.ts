@@ -355,7 +355,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
     });
     await bumpVersion(tx);
     return complaint;
-  });
+  }, { timeout: 60000, maxWait: 20000 });
   if (!created.engineerId) await queueAssignment(created.id);
 
   await notifyComplaint({

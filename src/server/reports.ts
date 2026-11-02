@@ -24,6 +24,9 @@ export const REPORTS = [
   { slug: "first-time-fix", title: "First-time fix", kind: "aggregate" as const, blurb: "Share of closures that were not a repeat and did not reopen within 30 days." },
   { slug: "customer-product", title: "Customer product summary", kind: "aggregate" as const, blurb: "Installed products by customer." },
   { slug: "past-service", title: "Equipment past service", kind: "rows" as const, blurb: "Earlier visits for the same serial." },
+  { slug: "pending-call-type", title: "Pending by call type", kind: "aggregate" as const, blurb: "Open work split by call type." },
+  { slug: "technician-performance", title: "Technician performance", kind: "aggregate" as const, blurb: "Open, closed and overdue work by technician." },
+  { slug: "state-district-mis", title: "State and district MIS", kind: "aggregate" as const, blurb: "Open and overdue complaints by state and district." },
 ];
 
 function dayStart(value?: string) {
@@ -194,6 +197,31 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
       rows: rows.map((row) => ({ technician: row.technician, reopened: Number(row.reopened) })),
       total: rows.length, page: 1, pageSize: rows.length,
     };
+  }
+  if (slug === "pending-call-type") {
+    const rows = await prisma.$queryRaw<{ callType: string; open: number; overdue: number }[]>`
+      SELECT c."callType" AS "callType",
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= NOW())::int AS overdue
+      FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} GROUP BY 1 ORDER BY 2 DESC`;
+    return { ...meta, columns: cols(["callType", "open", "overdue"]), rows, total: rows.length, page: 1, pageSize: rows.length };
+  }
+  if (slug === "technician-performance") {
+    const rows = await prisma.$queryRaw<{ technician: string; open: number; closed: number; overdue: number }[]>`
+      SELECT COALESCE(c."assignedName", 'Unassigned') AS technician,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
+        COUNT(*) FILTER (WHERE c.status IN ('CLOSED','HAPPY_CALLING'))::int AS closed,
+        COUNT(*) FILTER (WHERE c."slaBreached" = true)::int AS overdue
+      FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} GROUP BY 1 ORDER BY 2 DESC LIMIT 200`;
+    return { ...meta, columns: cols(["technician", "open", "closed", "overdue"]), rows, total: rows.length, page: 1, pageSize: rows.length };
+  }
+  if (slug === "state-district-mis") {
+    const rows = await prisma.$queryRaw<{ state: string; district: string; open: number; overdue: number }[]>`
+      SELECT COALESCE(c."stateName", 'Unknown') AS state, COALESCE(c."districtName", 'Unknown') AS district,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
+        COUNT(*) FILTER (WHERE c."slaBreached" = true AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS overdue
+      FROM "Complaint" c WHERE ${reportWhere(user, scope, filters)} GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 300`;
+    return { ...meta, columns: cols(["state", "district", "open", "overdue"]), rows, total: rows.length, page: 1, pageSize: rows.length };
   }
   if (slug === "customer-product") {
     const rows = await prisma.$queryRaw<{ customer: string; product: string; n: number }[]>`

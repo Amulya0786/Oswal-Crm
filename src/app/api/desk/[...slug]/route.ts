@@ -414,6 +414,11 @@ async function route(method: string, slug: string[], req: Request) {
   }
   if (head === "import" && method === "POST" && id === "commit") {
     const body = await readJson(req);
+    if (body.entity === "closed-dates") {
+      const { importClosedDates } = await import("@/server/importer");
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      return json(await importClosedDates(rows));
+    }
     if (body.entity === "pincode-blocks") {
       if (!viaImportToken) return json({ error: "Import token required" }, 401);
       const { linkPincodeBlocks } = await import("@/server/pincode-blocks");
@@ -422,6 +427,18 @@ async function route(method: string, slug: string[], req: Request) {
     return json(await commitImport(user, body));
   }
 
+  if (head === "report-export" && method === "GET") {
+    if (!user.caps.security) return json({ error: "Admins only" }, 403);
+    const { runReport } = await import("@/server/reports");
+    const report = await runReport(url.searchParams.get("slug") ?? "", user, scope, filtersFromRecord(Object.fromEntries(url.searchParams.entries())));
+    if (!report) return json({ error: "Unknown report" }, 404);
+    const header = report.columns.map((column) => column.label).join(",");
+    const lines = report.rows.map((row) => report.columns.map((column) => {
+      const value = String((row as Record<string, unknown>)[column.key] ?? "");
+      return `"${value.replace(/"/g, '""')}"`;
+    }).join(","));
+    return new Response([header, ...lines].join("\n"), { headers: { "Content-Type": "text/csv", "Content-Disposition": `attachment; filename="${report.slug}.csv"` } });
+  }
   if (head === "exports" && method === "GET") {
     if (!user.caps.export && !user.caps.security) return json({ error: "You cannot export" }, 403);
     const jobs = await prisma.exportJob.findMany({ where: user.caps.security ? {} : { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 });

@@ -13,7 +13,7 @@
   --paper: #f5f7f6;
   --paper-2: #eef3f0;
   --card: #ffffff;
-  --line: #e3e8e5;
+  --line: #d9d4ea;
   --accent: var(--brand);
   --accent-ink: var(--brand);
   --mast: #ffffff;
@@ -32,7 +32,7 @@
   --violet: #24523a;
   --shadow: 0 1px 2px rgba(20, 33, 27, 0.04), 0 10px 28px rgba(20, 33, 27, 0.06);
   --glow: 0 8px 20px rgba(2, 80, 47, 0.16);
-  --radius: 20px;
+  --radius: 12px;
   --font: var(--font-inter), var(--font-noto), "Noto Sans Devanagari", sans-serif;
   --display: var(--font-inter), var(--font-noto), sans-serif;
   --mono: var(--font-mono), "DM Mono", ui-monospace, monospace;
@@ -104,7 +104,7 @@ button { cursor: pointer; }
   padding: 9px 10px; border-radius: 12px; margin: 2px 0; font-size: 14px;
 }
 .side-link.active, .side-link:hover {
-  background: var(--good-bg);
+  background: #eef6f1;
   color: var(--brand);
 }
 [data-theme="dark"] .side-link.active { color: var(--gold); }
@@ -136,7 +136,7 @@ button { cursor: pointer; }
 .kicker { letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; color: var(--accent-ink); margin: 0 0 4px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 8px; }
 .section-head h2, .section-label { font-family: var(--display); font-size: 16px; letter-spacing: -0.02em; margin: 18px 0 8px; }
-.section-label { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.section-label { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
 .step { width: 26px; height: 26px; border-radius: 99px; display: inline-grid; place-items: center; background: var(--green); color: white; font-size: 13px; margin-right: 8px; }
 .form-section .section-head { margin-top: 0; justify-content: flex-start; gap: 8px; }
 .form-section .section-head h2 { margin: 0; }
@@ -168,9 +168,24 @@ button { cursor: pointer; }
 .table-wrap td, .table-wrap th { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 38px; }
 .table-wrap td .muted { display: inline; }
 .filters { margin-bottom: 12px; }
-input, select, textarea { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+input, select, textarea { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; height: 40px; }
+textarea { height: auto; padding: 10px 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field-label { font-size: 13px; line-height: 1.2; }
+.field-label .req, .req { color: #b42318; }
+.book-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px 16px; align-items: end; }
+.span-4 { grid-column: span 4; }
+.span-6 { grid-column: span 6; }
+.span-8 { grid-column: span 8; }
+.span-12 { grid-column: span 12; }
+.serial-actions { display: flex; gap: 8px; align-items: center; min-height: 40px; }
+.step-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.step-tabs span { padding: 8px 0; color: var(--muted); border-bottom: 2px solid transparent; }
+.step-tabs span.on { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+.step-bar { position: sticky; bottom: 8px; display: flex; justify-content: space-between; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 12px; }
+.step-bar .btn:not(.line) { background: #01331e; }
 textarea { width: 100%; min-height: 80px; }
-.btn { background: var(--brand); color: white; border-radius: 999px; padding: 10px 16px; border: 0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; }
+.btn { background: var(--brand); color: white; border-radius: 10px; padding: 10px 16px; border: 0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; min-height: 40px; }
 .btn:hover { box-shadow: var(--glow); }
 .btn.navy { background: var(--green-ink); }
 .btn.line, .btn-line { background: var(--card); color: var(--brand); border: 1px solid var(--line); }

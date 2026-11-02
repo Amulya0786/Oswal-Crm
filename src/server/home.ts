@@ -7,7 +7,7 @@ import type { SessionUser } from "@/lib/types";
 const DASH_TTL_MS = 5 * 60 * 1000;
 
 function cacheKey(user: SessionUser, scope: string, stateName?: string | null) {
-  return `dash:${user.role}:${scope}:${stateName ?? ""}:${user.companyIds.join(".")}:${user.stateIds.join(".")}:${user.brandIds.join(".")}`;
+  return `dash4:${user.role}:${scope}:${stateName ?? ""}:${user.companyIds.join(".")}:${user.stateIds.join(".")}:${user.brandIds.join(".")}`;
 }
 
 export async function homeSnapshot(user: SessionUser, scope: string, stateName?: string | null) {
@@ -63,21 +63,23 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
   const ageing = await prisma.$queryRaw<{ label: string; n: number }[]>`
     SELECT bucket AS label, COUNT(*)::int AS n FROM (
       SELECT CASE
-        WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 3 THEN '0-2 days'
-        WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 8 THEN '3-7 days'
+        WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 2 THEN '0-1 days'
+        WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 4 THEN '2-3 days'
+        WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 8 THEN '4-7 days'
         WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 16 THEN '8-15 days'
-        WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 31 THEN '16-30 days'
-        ELSE 'Over 30 days'
+        ELSE '15+ days'
       END AS bucket
       FROM "Complaint" c
       WHERE ${where} ${extra}
         AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING')
     ) s GROUP BY 1
   `;
-  const places = await prisma.$queryRaw<{ label: string; open: number; overdue: number }[]>`
+  const places = await prisma.$queryRaw<{ label: string; open: number; overdue: number; assigned: number; unassigned: number }[]>`
     SELECT COALESCE(NULLIF(${place}, ''), 'Unknown') AS label,
       COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
-      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= ${now})::int AS overdue
+      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= ${now})::int AS overdue,
+      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."engineerId" IS NOT NULL)::int AS assigned,
+      COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."engineerId" IS NULL)::int AS unassigned
     FROM "Complaint" c
     WHERE ${where} ${extra}
     GROUP BY 1
@@ -88,11 +90,11 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     SELECT COALESCE(c."assignedName", 'Unassigned') AS label, COUNT(*)::int AS n
     FROM "Complaint" c
     WHERE ${where} ${extra}
-      AND c.status IN ('CLOSED','HAPPY_CALLING')
-      AND c."closedAt" >= ${monthAgo}
+      AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING')
+      AND c."assignedName" IS NOT NULL
     GROUP BY 1
     ORDER BY n DESC
-    LIMIT 8
+    LIMIT 10
   `;
   const companies = await prisma.$queryRaw<{ label: string; n: number }[]>`
     SELECT co."shortName" AS label, COUNT(*)::int AS n
@@ -156,9 +158,8 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     SELECT c.id, c."ticketNo", c."customerName", c.status, c."stateName"
     FROM "Complaint" c
     WHERE ${where} ${extra} AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING')
-    ORDER BY c."bookDate" DESC LIMIT 8
+    ORDER BY c."bookDate" DESC LIMIT 10
   `;
-  const amc = await prisma.serviceContract.count({ where: { status: "ACTIVE", end: { lte: new Date(now.getTime() + 30 * 86400000) } } });
   const unassigned = await prisma.complaint.count({ where: { status: "OPEN", engineerId: null, excludeFromMis: false } });
   return {
     kpi: kpi ?? { booked: 0, closed: 0, pending: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0 },
@@ -166,7 +167,6 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     byStatus,
     monthBooked: Number(monthBooked[0]?.n ?? 0),
     latest,
-    amc,
     unassigned,
     ageing,
     places,

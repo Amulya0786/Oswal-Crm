@@ -199,6 +199,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
 
   const districtName = districts.find((row) => row.id === districtId)?.name;
   const productName = products.find((row) => row.id === productId)?.name;
+  const steps = ["Customer", "Address", "Product", "Complaint", "Review"];
   return (
     <form action={onSubmit} className="book-layout">
       {ticketNo && (
@@ -210,19 +211,30 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
         </section>
       )}
       <div className="stack">
+      <nav className="step-tabs" aria-label="Booking steps">
+        {steps.map((label, index) => <span key={label} className={step === index + 1 ? "on" : ""}>{index + 1} {label}</span>)}
+      </nav>
       <div className="chips">
         {companies.map((company) => (
           <button type="button" key={company.id} className={`chip ${companyId === company.id ? "on" : ""}`} onClick={() => setCompanyId(company.id)}>{company.shortName}</button>
         ))}
       </div>
-      <section className="panel stack form-section">
-        <header className="section-head"><span className="step">1</span><h2>Customer</h2></header>
-        <div className="filters">
-          <label className="stack">Mobile <span className="req">*</span><input name="phone" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))} required /></label>
-          <label className="stack">Serial number<input name="serialNo" placeholder="Serial number" value={serial} onChange={(event) => { setSerial(event.target.value); if (event.target.value.trim()) setSerialUnavailable(false); }} disabled={serialUnavailable} /></label>
-          <button type="button" className="btn line" onClick={() => void scanSerial()}>Scan</button>
+      <section className="panel stack form-section" hidden={step !== 1}>
+        <p className="section-label">Customer</p>
+        <div className="book-grid">
+          <label className="field span-4"><span className="field-label">Mobile <span className="req">*</span></span><input name="phone" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))} required /></label>
+          <label className="field span-4"><span className="field-label">Alternate mobile</span><input name="altPhone" inputMode="numeric" maxLength={10} /></label>
+          <label className="field span-4"><span className="field-label">Email</span><input name="email" type="email" /></label>
+          <label className="field span-12"><span className="field-label">Customer name <span className="req">*</span></span><input name="customerName" required value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label>
+          <label className="field span-6"><span className="field-label">Serial number</span><input name="serialNo" value={serial} onChange={(event) => { setSerial(event.target.value); if (event.target.value.trim()) setSerialUnavailable(false); }} disabled={serialUnavailable} /></label>
+          <div className="field span-6 serial-row">
+            <span className="field-label">Serial</span>
+            <div className="serial-actions">
+              <button type="button" className="btn line" onClick={() => void scanSerial()}>Scan</button>
+              <label className="chip"><input type="checkbox" checked={serialUnavailable} onChange={(event) => { setSerialUnavailable(event.target.checked); if (event.target.checked) setSerial(""); }} /> Serial not available</label>
+            </div>
+          </div>
         </div>
-        <label className="chip"><input type="checkbox" checked={serialUnavailable} onChange={(event) => { setSerialUnavailable(event.target.checked); if (event.target.checked) setSerial(""); }} /> Serial not available</label>
         {serialUnavailable && (
           <select value={serialReason} onChange={(event) => setSerialReason(event.target.value)}>
             {SERIAL_UNAVAILABLE_REASONS.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
@@ -258,24 +270,24 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
             <input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Reason" />
           </div>
         )}
-        <label className="stack">Customer name <span className="req">*</span><input name="customerName" required value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label>
-        <label className="stack">Alternate mobile<input name="altPhone" inputMode="numeric" maxLength={10} /></label>
-        <label className="stack">Email<input name="email" type="email" /></label>
-        <button type="button" className="btn" disabled={!/^[6-9]\d{9}$/.test(phone) || customerName.trim().length < 2} onClick={() => setStep(2)}>Next</button>
+        <div className="step-bar">
+          <span />
+          <button type="button" className="btn" disabled={!/^[6-9]\d{9}$/.test(phone) || customerName.trim().length < 2} onClick={() => setStep(2)}>Next</button>
+        </div>
       </section>
-      <section className="panel stack form-section" hidden={step < 2}>
-        <header className="section-head"><span className="step">2</span><h2>Address</h2></header>
-        <label className="stack">Address<input name="address" defaultValue={customer?.address ?? ""} key={`${customer?.id ?? "new"}-address`} /></label>
-        <div className="form-grid">
-          <label className="stack">State<select aria-label="State" value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictId(""); setTehsilId(""); }}>
+      <section className="panel stack form-section" hidden={step !== 2}>
+        <p className="section-label">Address</p>
+        <div className="book-grid">
+          <label className="field span-12"><span className="field-label">Address</span><input name="address" defaultValue={customer?.address ?? ""} key={`${customer?.id ?? "new"}-address`} /></label>
+          <label className="field span-4"><span className="field-label">State</span><select aria-label="State" value={stateId} onChange={(event) => { setStateId(event.target.value); setDistrictId(""); setTehsilId(""); }}>
             <option value="">State</option>
             {(options.states as Option[]).map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
           </select></label>
-          <label className="stack">District <span className="req">*</span><select value={districtId} onChange={(event) => { const id = event.target.value; setDistrictId(id); const row = districts.find((item) => item.id === id); if (row?.stateId) setStateId(row.stateId); }}>
+          <label className="field span-4"><span className="field-label">District <span className="req">*</span></span><select value={districtId} onChange={(event) => { const id = event.target.value; setDistrictId(id); const row = districts.find((item) => item.id === id); if (row?.stateId) setStateId(row.stateId); }}>
             <option value="">District</option>
             {districts.filter((district) => !stateId || district.stateId === stateId).map((district) => <option key={district.id} value={district.id}>{district.name}, {(options.states as Option[]).find((state) => state.id === district.stateId)?.name}</option>)}
           </select></label>
-          <label className="stack">Block / tehsil<input value={areaQuery} onChange={async (event) => {
+          <label className="field span-4"><span className="field-label">Block / tehsil</span><input value={areaQuery} onChange={async (event) => {
             const value = event.target.value;
             setAreaQuery(value);
             if (!districtId || value.length < 2) return;
@@ -284,11 +296,11 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           }} />
             {areaHits.map((hit) => <button type="button" key={hit.id} className="chip" onClick={() => { setAreaId(hit.id); setAreaQuery(hit.label); setAreaHits([]); }}>{hit.label}</button>)}
           </label>
-          <label className="stack">Tehsil / block<select aria-label="Tehsil" value={tehsilId} onChange={(event) => setTehsilId(event.target.value)}>
+          <label className="field span-4"><span className="field-label">Tehsil</span><select aria-label="Tehsil" value={tehsilId} onChange={(event) => setTehsilId(event.target.value)}>
             <option value="">Tehsil</option>
             {tehsils.map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}
           </select></label>
-          <label className="stack">Pincode <span className="req">*</span><input name="pincode" aria-label="Pincode" inputMode="numeric" maxLength={6} required value={pincode} onChange={async (event) => {
+          <label className="field span-4"><span className="field-label">Pincode <span className="req">*</span></span><input name="pincode" aria-label="Pincode" inputMode="numeric" maxLength={6} required value={pincode} onChange={async (event) => {
             const value = event.target.value.replace(/\D/g, "").slice(0, 6);
             setPincode(value);
             if (/^[1-9]\d{5}$/.test(value)) {
@@ -299,32 +311,39 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
             }
           }} /></label>
         </div>
-        <button type="button" className="btn" disabled={!districtId || !/^[1-9]\d{5}$/.test(pincode)} onClick={() => setStep(3)}>Next</button>
+        <div className="step-bar">
+          <button type="button" className="btn line" onClick={() => setStep(1)}>Back</button>
+          <button type="button" className="btn" disabled={!districtId || !/^[1-9]\d{5}$/.test(pincode)} onClick={() => setStep(3)}>Next</button>
+        </div>
       </section>
-      <section className="panel stack form-section" hidden={step < 3}>
-        <header className="section-head"><span className="step">3</span><h2>Product</h2></header>
-        <div className="filters">
-          <label className="stack">Category<select value={categoryId} onChange={(event) => chooseCategory(event.target.value)}>
+      <section className="panel stack form-section" hidden={step !== 3}>
+        <p className="section-label">Product</p>
+        <div className="book-grid">
+          <label className="field span-4"><span className="field-label">Category</span><select value={categoryId} onChange={(event) => chooseCategory(event.target.value)}>
             <option value="">Product category</option>
             {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select></label>
-          <label className="stack">Product<select value={productId} onChange={(event) => chooseProduct(event.target.value)}><option value="">Product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-          <label className="stack">Brand<select name="brandId" defaultValue=""><option value="">Brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
+          <label className="field span-4"><span className="field-label">Product</span><select value={productId} onChange={(event) => chooseProduct(event.target.value)}><option value="">Product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          <label className="field span-4"><span className="field-label">Brand</span><select name="brandId" defaultValue=""><option value="">Brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
+          <label className="field span-8"><span className="field-label">Product name</span><input name="productDetails" /></label>
+          <label className="field span-4"><span className="field-label">Purchase date</span><input name="purchaseDate" placeholder="dd/mm/yyyy" /></label>
         </div>
-        <label className="stack">Product name<input name="productDetails" /></label>
-        <label className="stack">Purchase date<input name="purchaseDate" placeholder="dd/mm/yyyy" /></label>
-        <button type="button" className="btn" onClick={() => setStep(4)}>Next</button>
+        <div className="step-bar">
+          <button type="button" className="btn line" onClick={() => setStep(2)}>Back</button>
+          <button type="button" className="btn" onClick={() => setStep(4)}>Next</button>
+        </div>
       </section>
-      <section className="panel stack form-section" hidden={step < 4}>
-        <header className="section-head"><span className="step">4</span><h2>Complaint</h2></header>
+      <section className="panel stack form-section" hidden={step !== 4}>
+        <p className="section-label">Complaint</p>
         <div className="chips">
           {CALL_TYPES.map((type) => <button type="button" key={type.id} className={`chip ${callType === type.id ? "on" : ""}`} onClick={() => setCallType(type.id)}>{type.label}</button>)}
         </div>
-        <div className="filters">
-          <label className="stack">Nature of complaint<select name="natureId" defaultValue=""><option value="">Nature of complaint</option>{(options.issues as Option[]).map((issue) => <option key={issue.id} value={issue.id}>{issue.name}</option>)}</select></label>
-          <select name="priority" defaultValue="NORMAL">{PRIORITIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-          <select name="source" defaultValue="CALL">{SOURCES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-          <label className="stack">Schedule date<input name="scheduleDate" placeholder="dd/mm/yyyy" inputMode="numeric" /></label>
+        <div className="book-grid">
+          <label className="field span-4"><span className="field-label">Nature of complaint <span className="req">*</span></span><select name="natureId" defaultValue=""><option value="">Nature of complaint</option>{(options.issues as Option[]).map((issue) => <option key={issue.id} value={issue.id}>{issue.name}</option>)}</select></label>
+          <label className="field span-4"><span className="field-label">Priority</span><select name="priority" defaultValue="NORMAL">{PRIORITIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <label className="field span-4"><span className="field-label">Source</span><select name="source" defaultValue="CALL">{SOURCES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <label className="field span-4"><span className="field-label">Schedule date</span><input name="scheduleDate" placeholder="dd/mm/yyyy" inputMode="numeric" /></label>
+          <label className="field span-12"><span className="field-label">Remarks</span><input name="natureText" /></label>
         </div>
         <details>
           <summary>Scheme, Saral and more</summary>
@@ -338,17 +357,23 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
             <label className="stack">Request subtype<input name="requestSubtype" /></label>
             <label className="stack">MSEDCL consumer no<input name="msedclConsumerNo" /></label>
             <label className="stack">Subdivision<input name="msedclSubdivision" /></label>
-            <label className="stack">Nature<input name="natureText" /></label>
           </div>
         </details>
-        <button type="button" className="btn" onClick={() => setStep(5)}>Review</button>
+        <div className="step-bar">
+          <button type="button" className="btn line" onClick={() => setStep(3)}>Back</button>
+          <button type="button" className="btn" onClick={() => setStep(5)}>Next</button>
+        </div>
       </section>
-      <section className="panel form-section" hidden={step < 5}>
-        <header className="section-head"><span className="step">5</span><h2>Review</h2></header>
+      <section className="panel form-section" hidden={step !== 5}>
+        <p className="section-label">Review</p>
         <p>{customerName || "Customer"} · {phone}</p>
         <p>{districtName || "Location"}{pincode ? ` · ${pincode}` : ""}</p>
         <p>{productName || "Product"} · {CALL_TYPES.find((type) => type.id === callType)?.label}</p>
         <p>Assignment happens after this complaint is saved.</p>
+        <div className="step-bar">
+          <button type="button" className="btn line" onClick={() => setStep(4)}>Back</button>
+          <button className="btn" disabled={pending}>{pending ? "Booking…" : "Save complaint"}</button>
+        </div>
       </section>
       </div>
       <aside className="submit-bar panel">
@@ -359,7 +384,6 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
         <p>{productName || "Product"} · {CALL_TYPES.find((type) => type.id === callType)?.label}</p>
         <p className="muted">Unassigned until a state head confirms</p>
         {error && <div className="banner bad">{error}</div>}
-        <button className="btn" disabled={pending}>{pending ? "Booking…" : "Save complaint"}</button>
       </aside>
     </form>
   );

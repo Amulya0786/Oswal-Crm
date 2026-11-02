@@ -94,6 +94,7 @@ export async function commitImport(user: SessionUser, input: { token: string; en
   const table = await readTableBytes(fileBytes, fileName);
   fileBytes = null;
   const rows = table.rows.map((row) => mapped(row, input.mapping));
+  if (input.entity === "closed-dates") return importClosedDates(rows);
   if (input.entity === "complaints") {
     await prisma.appSetting.upsert({ where: { key: "importRunning" }, create: { key: "importRunning", value: "1" }, update: { value: "1" } });
     try {
@@ -108,7 +109,26 @@ export async function commitImport(user: SessionUser, input: { token: string; en
     if (!user.caps.security) throw new HttpError(403, "Only an admin can import users");
     return importUsers(rows, input.companyId);
   }
-  throw new HttpError(400, "Choose complaints, customers, products or users");
+  throw new HttpError(400, "Choose complaints, customers, products, users or closed-dates");
+}
+
+export async function importClosedDates(rows: Record<string, string>[]) {
+  let updated = 0;
+  let missing = 0;
+  for (const row of rows) {
+    const ticketNo = String(row.ticketNo || row["comp. no"] || row["complaint no"] || "").trim();
+    const closedAt = parseLooseDate(row.closedDate || row["closing date"] || row["closed date"] || row["close date"]);
+    const happyAt = parseLooseDate(row.happyDate || row["happy calling date"] || row["happy date"]);
+    const when = closedAt ?? happyAt;
+    if (!ticketNo || !when) { missing += 1; continue; }
+    const result = await prisma.complaint.updateMany({
+      where: { ticketNo },
+      data: { closedAt: when, ...(happyAt ? { happyAt } : {}) },
+    });
+    if (result.count) updated += 1;
+    else missing += 1;
+  }
+  return { updated, missing, entity: "closed-dates" };
 }
 
 async function companyForProductText(text: string) {

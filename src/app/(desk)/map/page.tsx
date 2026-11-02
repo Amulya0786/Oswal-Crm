@@ -8,7 +8,8 @@ export default function MapPage() {
       <div className="page-head">
         <div>
           <p className="kicker">Service</p>
-          <h1>Open complaints</h1>
+          <h1>Team and GPS history</h1>
+          <p className="muted">Pick a date to replay that day's route. Pick a technician to see one trail.</p>
         </div>
       </div>
       <section className="panel">

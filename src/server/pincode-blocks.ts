@@ -114,3 +114,56 @@ export async function linkLoosePincodes() {
   const stillOpen = await prisma.pincode.count({ where: { blockId: null, urban: false } });
   return { matched, approximate, urban, stillOpen };
 }
+
+function levenshtein(left: string, right: string) {
+  if (Math.abs(left.length - right.length) > 2) return 3;
+  const rows = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    let previous = i - 1;
+    rows[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const current = rows[j];
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      rows[j] = Math.min(rows[j] + 1, rows[j - 1] + 1, previous + cost);
+      previous = current;
+    }
+  }
+  return rows[right.length];
+}
+
+/** Second pass for pins that still have no block: fuzzy name match inside the district. */
+export async function linkFuzzyBlocks() {
+  const tehsils = await prisma.tehsil.findMany({ where: { active: true }, select: { id: true, name: true, districtId: true } });
+  const byDistrict = new Map<string, { id: string; key: string }[]>();
+  for (const tehsil of tehsils) {
+    const list = byDistrict.get(tehsil.districtId) ?? [];
+    list.push({ id: tehsil.id, key: blockKey(tehsil.name) });
+    byDistrict.set(tehsil.districtId, list);
+  }
+  const pins = await prisma.pincode.findMany({
+    where: { blockId: null },
+    include: { area: true },
+  });
+  let matched = 0;
+  let noName = 0;
+  let noCandidate = 0;
+  for (const pin of pins) {
+    const wanted = blockKey(pin.area?.name ?? "");
+    const options = byDistrict.get(pin.districtId) ?? [];
+    if (!wanted || !options.length) {
+      if (!wanted) noName += 1;
+      else noCandidate += 1;
+      continue;
+    }
+    let best: { id: string; distance: number } | null = null;
+    for (const option of options) {
+      const distance = levenshtein(wanted, option.key);
+      if (distance <= 2 && (!best || distance < best.distance)) best = { id: option.id, distance };
+    }
+    if (!best) { noCandidate += 1; continue; }
+    await prisma.pincode.update({ where: { id: pin.id }, data: { blockId: best.id, blockApproximate: best.distance > 0 } });
+    matched += 1;
+  }
+  const stillOpen = await prisma.pincode.count({ where: { blockId: null } });
+  return { checked: pins.length, matched, noName, noCandidate, stillOpen };
+}

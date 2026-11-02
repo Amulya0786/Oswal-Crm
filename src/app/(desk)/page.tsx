@@ -68,7 +68,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {view !== "desk" && <Link className="tile" href="/complaints?statusGroup=active"><span>First contact overdue</span><b>{formatNumber(kpi.first_contact ?? 0)}</b></Link>}
         {view !== "desk" && <Link className="tile" href="/assign"><span>To assign</span><b>{formatNumber(data.unassigned ?? 0)}</b></Link>}
         {view !== "desk" && <Link className="tile" href="/complaints?booked=month"><span>This month</span><b>{formatNumber(data.monthBooked ?? 0)}</b></Link>}
-        {view !== "desk" && <Link className="tile" href="/contracts"><span>AMC due</span><b>{formatNumber(data.amc ?? 0)}</b></Link>}
       </div>
       {view === "desk" && (
         <div className="grid-2" style={{ marginTop: 16 }}>
@@ -80,38 +79,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {view !== "desk" && (
         <div className="grid-2" style={{ marginTop: 16 }}>
           <section className="panel">
-            <h2>{view === "state" ? "Districts" : "States"}</h2>
-            {places.map((row) => (
-              <div key={row.label} className="bar-row">
-                <span>{row.label}</span>
-                <span className="bar-track"><span style={{ width: `${(row.open / max) * 100}%` }} /></span>
-                <b>{formatNumber(row.open)}</b>
-              </div>
-            ))}
-            {!places.length && <p>No open complaints.</p>}
+            <p className="section-label">{view === "state" ? "Districts" : "States"}</p>
+            {!!places.length && (
+              <table>
+                <thead><tr><th>Place</th><th className="num">Open</th><th className="num">Overdue</th><th className="num">Assigned</th><th className="num">Unassigned</th></tr></thead>
+                <tbody>{places.map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.open)}</td><td className="num">{formatNumber(row.overdue)}</td><td className="num">{formatNumber(row.assigned ?? 0)}</td><td className="num">{formatNumber(row.unassigned ?? 0)}</td></tr>)}</tbody>
+              </table>
+            )}
           </section>
           <section className="panel">
-            <h2>Ageing</h2>
-            <table><tbody>{ageing.map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>
-            {!ageing.length && <p>No open complaints.</p>}
-            <h2>Repeat and ratings</h2>
-            <p>Repeat open · {formatNumber(kpi.repeats)}</p>
-            <p>Happy calling waiting · {formatNumber(kpi.happy)}</p>
-            <p>Average rating · {kpi.rating || "—"}</p>
-            <h2>Companies</h2>
+            <p className="section-label">Ageing</p>
+            {!!ageing.length && <table><tbody>{ageing.map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>}
+            <p className="section-label">Pumps and Solar</p>
             {companies.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} open</p>)}
+            <p>SLA overdue · {formatNumber(kpi.overdue)} · First contact overdue · {formatNumber(kpi.first_contact ?? 0)}</p>
           </section>
           <section className="panel">
-            <h2>Technicians, 30 days</h2>
-            {technicians.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} closed</p>)}
-            {!technicians.length && <p>No closures in 30 days.</p>}
+            <p className="section-label">Technician workload</p>
+            {technicians.map((row) => <p key={row.label}>{row.label} · {formatNumber(row.n)} open</p>)}
           </section>
           <section className="panel">
-            <h2>Pending by call type</h2>
-            <table><tbody>{(data.byCall ?? []).map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>
-            <h2>Status</h2>
-            <table><tbody>{(data.byStatus ?? []).map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>
-            <h2>Latest open</h2>
+            <p className="section-label">Call type</p>
+            {!!(data.byCall ?? []).length && <table><tbody>{(data.byCall ?? []).map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>}
+            <p className="section-label">Status</p>
+            {!!(data.byStatus ?? []).length && <table><tbody>{(data.byStatus ?? []).map((row) => <tr key={row.label}><td>{row.label}</td><td className="num">{formatNumber(row.n)}</td></tr>)}</tbody></table>}
+            <p className="section-label">Latest open</p>
             {(data.latest ?? []).map((row) => <p key={row.id}><Link href={`/complaints/${row.id}`}>{row.ticketNo}</Link> · {row.customerName} · {row.stateName}</p>)}
           </section>
           <section className="panel">
