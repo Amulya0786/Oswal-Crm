@@ -11,7 +11,6 @@ COPY . .
 RUN printf '%s\n' 'DIRECT_URL="${DATABASE_URL}"' > .env
 ARG NEXT_PUBLIC_DEMO_HINTS=0
 ENV NEXT_PUBLIC_DEMO_HINTS=$NEXT_PUBLIC_DEMO_HINTS
-ENV NODE_OPTIONS="--require /app/scripts/direct-url.cjs --max-old-space-size=448"
 RUN npx prisma generate && npm run build \
  && mkdir -p .next/standalone/public .next/standalone/.next/static \
  && rm -rf .next/standalone/node_modules \
@@ -28,7 +27,8 @@ ENV HOSTNAME=0.0.0.0
 # The build value must not leak into runtime. An empty value lets direct-url.cjs copy DATABASE_URL.
 ENV DIRECT_URL=
 # Leave room in the 1GB instance for the system and Prisma. The paid size stays apps-s-1vcpu-1gb.
-# direct-url.cjs copies DATABASE_URL into DIRECT_URL when the app spec has not set it yet.
+# This is set after the image build. A 448MB heap is too small for `next build`.
+ENV NODE_OPTIONS="--require /app/scripts/direct-url.cjs --max-old-space-size=448"
 EXPOSE 3000
 # Migrations run in the App Platform pre-deploy job. Starting only the server keeps this process small enough to pass the health check.
 CMD ["node", ".next/standalone/server.js"]

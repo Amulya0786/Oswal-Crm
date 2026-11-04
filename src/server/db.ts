@@ -3,7 +3,8 @@ import { runtimeDatabaseUrl } from "./db-url";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-const databaseUrl = runtimeDatabaseUrl(process.env.DATABASE_URL);
+// Dynamic lookup so the build does not bake the image's placeholder URL into the server.
+const databaseUrl = runtimeDatabaseUrl(process.env["DATABASE_URL"]);
 
 export const prisma =
   globalForPrisma.prisma ??
