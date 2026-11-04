@@ -7,6 +7,7 @@ import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, L
 import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { DESK_LABEL, type FieldLang } from "@/lib/i18n";
+import { phrase } from "@/lib/desk-copy";
 import { BrandLogo, PageTransition, ThemeToggle } from "@/components/chrome";
 import { AlertBell } from "@/components/alert-bell";
 import { showToast } from "@/components/toast";
@@ -54,6 +55,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   const [navOpen, setNavOpen] = useState(false);
   const [lang, setLang] = useState<"en" | "hi">("en");
   const [q, setQ] = useState("");
+  const [pendingRefresh, setPendingRefresh] = useState(false);
   const [hits, setHits] = useState<{ complaints: { id: string; ticketNo: string; customerName: string; status: string }[]; customers: { id: string; name: string; phone: string }[]; engineers: { id: string; name: string }[] }>({ complaints: [], customers: [], engineers: [] });
   const current = user.companies.find((company) => company.id === scope);
   const logo = current?.code === "SOLAR" ? "SOLAR" : "PUMPS";
@@ -107,17 +109,51 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   }, [q, open]);
 
   useEffect(() => {
-    const timer = setInterval(async () => {
-      if (path.startsWith("/complaints/book")) return;
+    setPendingRefresh(false);
+  }, [version]);
+
+  useEffect(() => {
+    if (path.startsWith("/complaints/book")) return;
+    let timer = 0;
+    let stopped = false;
+
+    async function check() {
+      if (stopped || document.hidden) return;
       const active = document.activeElement?.tagName;
       if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active)) return;
-      const response = await fetch("/api/desk/live");
-      if (!response.ok) return;
-      const body = await response.json();
-      if (body.version !== version) router.refresh();
-    }, 12000);
-    return () => clearInterval(timer);
-  }, [path, router, version]);
+      try {
+        const response = await fetch("/api/desk/live", { cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json() as { version?: number };
+        if (body.version !== version) setPendingRefresh(true);
+      } catch {
+        /* the next check tries again */
+      }
+    }
+
+    function start() {
+      window.clearInterval(timer);
+      if (document.hidden) return;
+      timer = window.setInterval(() => { void check(); }, 60_000);
+    }
+
+    function onVisibility() {
+      if (document.hidden) {
+        window.clearInterval(timer);
+        return;
+      }
+      void check();
+      start();
+    }
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [path, version]);
 
   async function choose(companyId: string) {
     await fetch("/api/company", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId }) });
@@ -172,6 +208,9 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             </div>
           </details>
         </div>
+        {pendingRefresh && !path.startsWith("/complaints/book") && (
+          <button type="button" className="update-notice" onClick={() => router.refresh()}>{phrase(lang, "New updates – tap to refresh")}</button>
+        )}
       </header>
       <div className="workspace">
         <aside className="sidebar">

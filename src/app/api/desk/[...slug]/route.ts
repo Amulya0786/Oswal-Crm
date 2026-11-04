@@ -76,7 +76,9 @@ async function route(method: string, slug: string[], req: Request) {
   const handled = await release3(method, head, id, user, req, url);
   if (handled) return handled;
 
-  if (method === "GET" && head === "live") return json({ version: await getVersion() });
+  if (method === "GET" && head === "live") {
+    return Response.json({ version: await getVersion() }, { headers: { "Cache-Control": "no-store" } });
+  }
 
   if (method === "GET" && head === "performance") {
     if (!user.caps.analytics) return json({ error: "You cannot open technician scores" }, 403);

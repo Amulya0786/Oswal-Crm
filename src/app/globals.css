@@ -131,6 +131,7 @@ button { cursor: pointer; }
 .alert-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px; }
 .alert-row a { color: var(--ink); text-decoration: none; }
 .live-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--gold); box-shadow: 0 0 0 0 rgba(255, 206, 48, 0.7); animation: pulse 1.8s infinite; display: inline-block; }
+.update-notice { display: block; width: 100%; background: var(--warn-bg); color: var(--ink); border: 0; border-top: 1px solid #efd7a2; padding: 6px 12px; cursor: pointer; font-size: 12px; text-align: center; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 6px rgba(255, 206, 48, 0); } }
 .crumbs { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; margin-bottom: 8px; flex-wrap: wrap; }
 .crumbs a { text-decoration: none; }

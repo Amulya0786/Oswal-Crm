@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { ComplaintFilters, SessionUser } from "@/lib/types";
 import { nameReviewSql } from "@/lib/names";
+import { normaliseSerial } from "@/lib/quality";
 import { ACTIVE_STATUSES } from "@/lib/labels";
 import {
   ageingBounds,
@@ -128,14 +129,19 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
     const pattern = like(q);
     const compact = q.replace(/\s/g, "");
     const ticketPattern = /^OPL/i.test(compact) ? `${compact.toUpperCase()}%` : pattern;
+    // Both serial columns have a trigram index. serialNorm is stored without spaces or dashes, so match that form too.
+    const serialQuery = normaliseSerial(q);
+    const serialSql = serialQuery.length >= 2
+      ? Prisma.sql`OR ${col(alias, "serialNo")} ILIKE ${pattern} ESCAPE '\\' OR ${col(alias, "serialNorm")} ILIKE ${like(serialQuery)} ESCAPE '\\'`
+      : Prisma.sql`OR ${col(alias, "serialNo")} ILIKE ${pattern} ESCAPE '\\'`;
     parts.push(Prisma.sql`(
       ${col(alias, "ticketNo")} ILIKE ${ticketPattern} ESCAPE '\\'
       OR ${col(alias, "customerName")} ILIKE ${pattern} ESCAPE '\\'
       OR ${col(alias, "phone")} ILIKE ${pattern} ESCAPE '\\'
-      OR COALESCE(${col(alias, "serialNo")}, '') ILIKE ${pattern} ESCAPE '\\'
-      OR COALESCE(${col(alias, "saralId")}, '') ILIKE ${pattern} ESCAPE '\\'
-      OR COALESCE(${col(alias, "assignedName")}, '') ILIKE ${pattern} ESCAPE '\\'
-      OR COALESCE(${col(alias, "productDetails")}, '') ILIKE ${pattern} ESCAPE '\\'
+      ${serialSql}
+      OR ${col(alias, "saralId")} ILIKE ${pattern} ESCAPE '\\'
+      OR ${col(alias, "assignedName")} ILIKE ${pattern} ESCAPE '\\'
+      OR ${col(alias, "productDetails")} ILIKE ${pattern} ESCAPE '\\'
     )`);
   }
   const knownStatus = new Set<string>([...ACTIVE, "CLOSED", "CLOSED_UNVERIFIED", "HAPPY_CALLING", "CANCELLED"]);

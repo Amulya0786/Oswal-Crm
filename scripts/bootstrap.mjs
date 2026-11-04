@@ -4,8 +4,10 @@ import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { COMPANIES, PROOF_DEFAULT, SLA_HOURS, adminBootstrapError } from "./bootstrap-rules.mjs";
 import { loadReference } from "../src/server/load-reference.mjs";
+import { runtimeDatabaseUrl } from "./db-url.mjs";
 
-const prisma = new PrismaClient();
+const databaseUrl = runtimeDatabaseUrl(process.env.DATABASE_URL);
+const prisma = new PrismaClient(databaseUrl ? { datasources: { db: { url: databaseUrl } } } : undefined);
 
 function ensureStorage() {
   const root = process.env.STORAGE_DIR;

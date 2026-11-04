@@ -44,6 +44,7 @@ const HI: Record<string, string> = {
   "Due services": "बकाया सेवा",
   "Engineer signatures": "इंजीनियर हस्ताक्षर",
   "Import in progress, counts may change": "आयात चल रहा है, गिनती बदल सकती है",
+  "New updates – tap to refresh": "नई जानकारी – रीफ़्रेश करने के लिए टैप करें",
   "No open complaints.": "कोई खुली शिकायत नहीं।",
   None: "कोई नहीं",
 };

@@ -30,7 +30,7 @@ jobs:
       branch: cursor/oswal-service-crm-5f17
       deploy_on_push: true
     dockerfile_path: Dockerfile
-    run_command: npx prisma migrate deploy && node scripts/bootstrap.mjs
+    run_command: node scripts/migrate.mjs && node scripts/bootstrap.mjs
     instance_size_slug: apps-s-1vcpu-1gb
     instance_count: 1
 
@@ -43,6 +43,11 @@ databases:
 
 envs:
   - key: DATABASE_URL
+    scope: RUN_TIME
+    value: ${oswal-db.DATABASE_URL}
+  # Direct connection for prisma migrate. Keep this on the database, not the pooler.
+  # When DATABASE_URL is switched to the PgBouncer URL, leave DIRECT_URL as ${oswal-db.DATABASE_URL}.
+  - key: DIRECT_URL
     scope: RUN_TIME
     value: ${oswal-db.DATABASE_URL}
   - key: APP_URL

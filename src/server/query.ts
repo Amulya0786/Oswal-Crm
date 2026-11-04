@@ -7,47 +7,45 @@ import { CALL_TYPES, labelOf } from "@/lib/labels";
 import { ageDays, kolkataMonthStart, kolkataNextMonthStart, kolkataTodayStart, kolkataYmd, midnightShift, shiftYmd } from "@/lib/time";
 import { assessSla } from "@/lib/sla";
 import { displayPhone } from "@/lib/mask";
+import { forget, remember } from "./memory-cache";
 
 const SORTS = new Set(["bookDate", "ticketNo", "status", "priority", "customerName", "slaDueAt", "updatedAt"]);
-
-let signalCache: { at: number; loadIds: string[]; loadCounts: Map<string, number>; hist: Record<string, number> } | null = null;
+const COUNT_TTL_MS = 60_000;
 
 export async function loadRiskContext(now = new Date()): Promise<RiskContext> {
-  if (!process.env.VITEST && signalCache && Date.now() - signalCache.at < 60_000) {
-    return { now, ...signalCache };
-  }
-  const since = new Date(now.getTime() - 180 * 86400000);
-  const [loads, histRows] = await Promise.all([
-    prisma.$queryRaw<{ id: string; n: number }[]>`
-      SELECT "engineerId" AS id, COUNT(*)::int AS n
-      FROM "Complaint"
-      WHERE status IN (${Prisma.join(ACTIVE)}) AND "engineerId" IS NOT NULL
-      GROUP BY "engineerId"
-    `,
-    prisma.$queryRaw<{ call: string; hours: number | null }[]>`
-      SELECT "callType" AS call, AVG(EXTRACT(EPOCH FROM ("closedAt" - "bookDate")) / 3600) AS hours
-      FROM "Complaint"
-      WHERE status IN ('CLOSED', 'HAPPY_CALLING') AND "closedAt" IS NOT NULL AND "closedAt" >= ${since}
-      GROUP BY "callType"
-    `,
-  ]);
-  const loadCounts = new Map<string, number>();
-  const loadIds: string[] = [];
-  for (const row of loads) {
-    const n = Number(row.n);
-    if (!row.id) continue;
-    loadCounts.set(row.id, n);
-    if (n >= 10) loadIds.push(row.id);
-  }
-  const hist: Record<string, number> = {};
-  for (const row of histRows) if (row.hours != null) hist[row.call] = Number(row.hours);
-  const snapshot = { loadIds, loadCounts, hist };
-  if (!process.env.VITEST) signalCache = { at: Date.now(), ...snapshot };
+  const snapshot = await remember("risk-signals", "all", COUNT_TTL_MS, async () => {
+    const since = new Date(now.getTime() - 180 * 86400000);
+    const [loads, histRows] = await Promise.all([
+      prisma.$queryRaw<{ id: string; n: number }[]>`
+        SELECT "engineerId" AS id, COUNT(*)::int AS n
+        FROM "Complaint"
+        WHERE status IN (${Prisma.join(ACTIVE)}) AND "engineerId" IS NOT NULL
+        GROUP BY "engineerId"
+      `,
+      prisma.$queryRaw<{ call: string; hours: number | null }[]>`
+        SELECT "callType" AS call, AVG(EXTRACT(EPOCH FROM ("closedAt" - "bookDate")) / 3600) AS hours
+        FROM "Complaint"
+        WHERE status IN ('CLOSED', 'HAPPY_CALLING') AND "closedAt" IS NOT NULL AND "closedAt" >= ${since}
+        GROUP BY "callType"
+      `,
+    ]);
+    const loadCounts = new Map<string, number>();
+    const loadIds: string[] = [];
+    for (const row of loads) {
+      const n = Number(row.n);
+      if (!row.id) continue;
+      loadCounts.set(row.id, n);
+      if (n >= 10) loadIds.push(row.id);
+    }
+    const hist: Record<string, number> = {};
+    for (const row of histRows) if (row.hours != null) hist[row.call] = Number(row.hours);
+    return { loadIds, loadCounts, hist };
+  });
   return { now, ...snapshot };
 }
 
 export function clearSignalCache() {
-  signalCache = null;
+  forget("risk-signals");
 }
 
 type RawRow = {
@@ -166,6 +164,22 @@ const LIST_COLUMNS = Prisma.raw(`
   "closedAt", "schemeName"
 `);
 
+function listCountKey(user: SessionUser, scope: string, filters: ComplaintFilters) {
+  const { cursor: _cursor, page: _page, pageSize: _pageSize, ...rest } = filters;
+  const ordered = Object.fromEntries(Object.entries(rest).sort(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify({
+    id: user.id,
+    role: user.role,
+    engineerId: user.engineerId,
+    scope,
+    companies: user.companyIds,
+    states: user.stateIds,
+    districts: user.districtIds,
+    brands: user.brandIds,
+    filters: ordered,
+  });
+}
+
 export async function listComplaints(user: SessionUser, scope: string, filters: ComplaintFilters, now = new Date()) {
   const ctx = await loadRiskContext(now);
   const where = Prisma.sql`${scopeSql(user, scope)} AND ${filterSql(filters, ctx)}`;
@@ -174,10 +188,13 @@ export async function listComplaints(user: SessionUser, scope: string, filters: 
   const cursorSql = cursor
     ? Prisma.sql`AND ("bookDate" < ${cursor.at} OR ("bookDate" = ${cursor.at} AND "id" < ${cursor.id}))`
     : Prisma.empty;
-  const [countRows, rows, companies] = await Promise.all([
+  const [total, rows, companies] = await Promise.all([
     cursor
-      ? Promise.resolve([{ n: 0 }])
-      : prisma.$queryRaw<{ n: number }[]>`SELECT COUNT(*)::int AS n FROM "Complaint" WHERE ${where}`,
+      ? Promise.resolve(0)
+      : remember("complaint-total", listCountKey(user, scope, filters), COUNT_TTL_MS, async () => {
+        const countRows = await prisma.$queryRaw<{ n: number }[]>`SELECT COUNT(*)::int AS n FROM "Complaint" WHERE ${where}`;
+        return Number(countRows[0]?.n ?? 0);
+      }),
     prisma.$queryRaw<RawRow[]>`
       SELECT ${LIST_COLUMNS}
       FROM "Complaint"
@@ -191,7 +208,7 @@ export async function listComplaints(user: SessionUser, scope: string, filters: 
   const last = rows[rows.length - 1];
   return {
     rows: rows.map((row) => present(row, user, ctx, names)),
-    total: Number(countRows[0]?.n ?? 0),
+    total,
     page: 1,
     pageSize,
     capped: false,
@@ -230,9 +247,6 @@ export type DashboardData = {
   serialGap: { total: number; missing: number; percent: number; byState: SerialGap[]; byTechnician: SerialGap[]; bySource: SerialGap[] };
 };
 
-const dashCache = new Map<string, DashboardData>();
-const inflight = new Map<string, Promise<DashboardData>>();
-
 function tileHref(filters: ComplaintFilters, extra: Record<string, string>) {
   const params = new URLSearchParams();
   for (const key of ["stateId", "districtId", "engineerId", "productId", "callType", "companyId"] as const) {
@@ -270,7 +284,7 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
   const age15 = midnightShift(now, -15);
   const risk = riskPredicate(ctx);
   const active = Prisma.join(ACTIVE);
-  const counts = await prisma.$queryRaw<Record<string, number>[]>`
+  const countsP = prisma.$queryRaw<Record<string, number>[]>`
     SELECT
       COUNT(*) FILTER (WHERE status IN (${active}))::int AS active,
       COUNT(*) FILTER (WHERE status = 'OPEN')::int AS open,
@@ -301,37 +315,6 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
     FROM "Complaint"
     WHERE ${where}
   `;
-  const c = counts[0] ?? {};
-  const num = (key: string) => Number(c[key] ?? 0);
-  const tiles: Tile[] = [
-    { key: "active", group: "pipeline", tone: "navy", label: "All live calls", value: num("active"), hint: "Open, assigned and on hold", href: tileHref(drill, { statusGroup: "active" }) },
-    { key: "open", group: "pipeline", tone: "info", label: "Open", value: num("open"), hint: "Not yet assigned", href: tileHref(drill, { status: "OPEN" }) },
-    { key: "assigned", group: "pipeline", tone: "copper", label: "Assigned", value: num("assigned"), hint: "With a technician", href: tileHref(drill, { status: "ASSIGNED" }) },
-    { key: "pending", group: "pipeline", tone: "amber", label: "Pending", value: num("pending"), hint: "Held with a reason", href: tileHref(drill, { status: "PENDING" }) },
-    { key: "reassigned", group: "pipeline", tone: "violet", label: "Re-assigned", value: num("reassigned"), hint: "Moved to another technician", href: tileHref(drill, { status: "REASSIGNED" }) },
-    { key: "breakdown", group: "type", tone: "bad", label: "Pending breakdown", value: num("breakdown"), hint: "Live breakdown calls", href: tileHref(drill, { statusGroup: "active", callType: "BREAKDOWN" }) },
-    { key: "installation", group: "type", tone: "info", label: "Pending installation", value: num("installation"), hint: "New fitments", href: tileHref(drill, { statusGroup: "active", callType: "INSTALLATION" }) },
-    { key: "insurance", group: "type", tone: "copper", label: "Pending insurance", value: num("insurance"), hint: "Survey and claims", href: tileHref(drill, { statusGroup: "active", callType: "INSURANCE" }) },
-    { key: "mobile", group: "type", tone: "teal", label: "Pending mobile app", value: num("mobile"), hint: "App complaints", href: tileHref(drill, { statusGroup: "active", callType: "MOBILE_APP" }) },
-    { key: "scheme", group: "type", tone: "amber", label: "Pending scheme", value: num("scheme"), hint: "MSEDCL and KUSUM", href: tileHref(drill, { statusGroup: "active", callType: "SCHEME" }) },
-    { key: "logged_month", group: "month", tone: "navy", label: "Logged this month", value: num("logged_month"), hint: "Complaints booked", href: tileHref(drill, { booked: "month" }) },
-    { key: "closed_month", group: "month", tone: "good", label: "Closed this month", value: num("closed_month"), hint: "Status closed", href: tileHref(drill, { closed: "month" }) },
-    { key: "happy_month", group: "month", tone: "teal", label: "Happy call this month", value: num("happy_month"), hint: "Phone feedback done", href: tileHref(drill, { happy: "month" }) },
-    { key: "cancel_month", group: "month", tone: "stone", label: "Cancelled", value: num("cancel_month"), hint: "This month", href: tileHref(drill, { cancelled: "month" }) },
-    { key: "logged_today", group: "today", tone: "navy", label: "Logged today", value: num("logged_today"), hint: "Since midnight IST", href: tileHref(drill, { booked: "today" }) },
-    { key: "closed_today", group: "today", tone: "good", label: "Closed today", value: num("closed_today"), hint: "Closed since midnight", href: tileHref(drill, { closed: "today" }) },
-    { key: "happy_today", group: "today", tone: "teal", label: "Happy call", value: num("happy_today"), hint: "Phone feedback today", href: tileHref(drill, { happy: "today" }) },
-    { key: "cancel_today", group: "today", tone: "stone", label: "Cancelled today", value: num("cancel_today"), hint: "Cancelled today", href: tileHref(drill, { cancelled: "today" }) },
-    { key: "age_0_2", group: "age", tone: "good", label: "0–2 days", value: num("age_0_2"), hint: "Fresh complaints", href: tileHref(drill, { ageing: "0-2" }) },
-    { key: "age_3_7", group: "age", tone: "info", label: "3–7 days", value: num("age_3_7"), hint: "Needs a push", href: tileHref(drill, { ageing: "3-7" }) },
-    { key: "age_8_15", group: "age", tone: "amber", label: "8–15 days", value: num("age_8_15"), hint: "Ageing", href: tileHref(drill, { ageing: "8-15" }) },
-    { key: "age_15p", group: "age", tone: "bad", label: "Over 15 days", value: num("age_15p"), hint: "Older than 15 days", href: tileHref(drill, { ageing: "15p" }) },
-    { key: "breach", group: "sla", tone: "bad", label: "SLA breached", value: num("breach"), hint: "Past the promise time", href: tileHref(drill, { breach: "1" }) },
-    { key: "risk", group: "sla", tone: "amber", label: "At risk", value: num("risk"), hint: "Likely to breach", href: tileHref(drill, { risk: "1" }) },
-    { key: "feedback_score", group: "feedback", tone: "good", label: "WhatsApp rating", value: num("feedback_score"), hint: "Average of 1 to 5", href: "/feedback" },
-    { key: "feedback_pending", group: "feedback", tone: "amber", label: "Ratings waiting", value: num("feedback_pending"), hint: "Closed visits with no score yet", href: "/feedback" },
-  ];
-
   const dim = dimension === "district" || dimension === "engineer" || dimension === "product" || dimension === "type" ? dimension : "state";
   const labelExpr =
     dim === "district" ? Prisma.raw(`COALESCE("districtName", 'Unknown')`) :
@@ -348,7 +331,16 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
   const paramKey = dim === "district" ? "districtId" : dim === "engineer" ? "engineerId" : dim === "product" ? "productId" : dim === "type" ? "callType" : "stateId";
 
   const start = midnightShift(now, -29);
-  const [drillRows, loggedRows, closedRows, recentRows, companyRows, companyActive] = await Promise.all([
+  const gap = (expr: Prisma.Sql) => prisma.$queryRaw<{ label: string; total: number; missing: number }[]>`
+    SELECT ${expr} AS label, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE "serialNorm" IS NULL)::int AS missing
+    FROM "Complaint" WHERE ${where}
+    GROUP BY 1
+    HAVING COUNT(*) FILTER (WHERE "serialNorm" IS NULL) > 0
+    ORDER BY missing DESC
+    LIMIT 8
+  `;
+  const [counts, drillRows, loggedRows, closedRows, recentRows, companyRows, companyActive, serialTotals, byState, byTechnician, bySource] = await Promise.all([
+    countsP,
     prisma.$queryRaw<{ label: string; id: string; n: number }[]>`
       SELECT ${labelExpr} AS label, ${idExpr} AS id, COUNT(*)::int AS n
       FROM "Complaint"
@@ -381,7 +373,44 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
       WHERE ${where} AND status IN (${active})
       GROUP BY "companyId"
     `,
+    prisma.$queryRaw<{ total: number; missing: number }[]>`
+      SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE "serialNorm" IS NULL)::int AS missing
+      FROM "Complaint" WHERE ${where}
+    `,
+    gap(Prisma.raw(`COALESCE("stateName", 'Unknown')`)),
+    gap(Prisma.raw(`COALESCE("assignedName", 'Unassigned')`)),
+    gap(Prisma.raw(`COALESCE(source, 'Unknown')`)),
   ]);
+  const c = counts[0] ?? {};
+  const num = (key: string) => Number(c[key] ?? 0);
+  const tiles: Tile[] = [
+    { key: "active", group: "pipeline", tone: "navy", label: "All live calls", value: num("active"), hint: "Open, assigned and on hold", href: tileHref(drill, { statusGroup: "active" }) },
+    { key: "open", group: "pipeline", tone: "info", label: "Open", value: num("open"), hint: "Not yet assigned", href: tileHref(drill, { status: "OPEN" }) },
+    { key: "assigned", group: "pipeline", tone: "copper", label: "Assigned", value: num("assigned"), hint: "With a technician", href: tileHref(drill, { status: "ASSIGNED" }) },
+    { key: "pending", group: "pipeline", tone: "amber", label: "Pending", value: num("pending"), hint: "Held with a reason", href: tileHref(drill, { status: "PENDING" }) },
+    { key: "reassigned", group: "pipeline", tone: "violet", label: "Re-assigned", value: num("reassigned"), hint: "Moved to another technician", href: tileHref(drill, { status: "REASSIGNED" }) },
+    { key: "breakdown", group: "type", tone: "bad", label: "Pending breakdown", value: num("breakdown"), hint: "Live breakdown calls", href: tileHref(drill, { statusGroup: "active", callType: "BREAKDOWN" }) },
+    { key: "installation", group: "type", tone: "info", label: "Pending installation", value: num("installation"), hint: "New fitments", href: tileHref(drill, { statusGroup: "active", callType: "INSTALLATION" }) },
+    { key: "insurance", group: "type", tone: "copper", label: "Pending insurance", value: num("insurance"), hint: "Survey and claims", href: tileHref(drill, { statusGroup: "active", callType: "INSURANCE" }) },
+    { key: "mobile", group: "type", tone: "teal", label: "Pending mobile app", value: num("mobile"), hint: "App complaints", href: tileHref(drill, { statusGroup: "active", callType: "MOBILE_APP" }) },
+    { key: "scheme", group: "type", tone: "amber", label: "Pending scheme", value: num("scheme"), hint: "MSEDCL and KUSUM", href: tileHref(drill, { statusGroup: "active", callType: "SCHEME" }) },
+    { key: "logged_month", group: "month", tone: "navy", label: "Logged this month", value: num("logged_month"), hint: "Complaints booked", href: tileHref(drill, { booked: "month" }) },
+    { key: "closed_month", group: "month", tone: "good", label: "Closed this month", value: num("closed_month"), hint: "Status closed", href: tileHref(drill, { closed: "month" }) },
+    { key: "happy_month", group: "month", tone: "teal", label: "Happy call this month", value: num("happy_month"), hint: "Phone feedback done", href: tileHref(drill, { happy: "month" }) },
+    { key: "cancel_month", group: "month", tone: "stone", label: "Cancelled", value: num("cancel_month"), hint: "This month", href: tileHref(drill, { cancelled: "month" }) },
+    { key: "logged_today", group: "today", tone: "navy", label: "Logged today", value: num("logged_today"), hint: "Since midnight IST", href: tileHref(drill, { booked: "today" }) },
+    { key: "closed_today", group: "today", tone: "good", label: "Closed today", value: num("closed_today"), hint: "Closed since midnight", href: tileHref(drill, { closed: "today" }) },
+    { key: "happy_today", group: "today", tone: "teal", label: "Happy call", value: num("happy_today"), hint: "Phone feedback today", href: tileHref(drill, { happy: "today" }) },
+    { key: "cancel_today", group: "today", tone: "stone", label: "Cancelled today", value: num("cancel_today"), hint: "Cancelled today", href: tileHref(drill, { cancelled: "today" }) },
+    { key: "age_0_2", group: "age", tone: "good", label: "0–2 days", value: num("age_0_2"), hint: "Fresh complaints", href: tileHref(drill, { ageing: "0-2" }) },
+    { key: "age_3_7", group: "age", tone: "info", label: "3–7 days", value: num("age_3_7"), hint: "Needs a push", href: tileHref(drill, { ageing: "3-7" }) },
+    { key: "age_8_15", group: "age", tone: "amber", label: "8–15 days", value: num("age_8_15"), hint: "Ageing", href: tileHref(drill, { ageing: "8-15" }) },
+    { key: "age_15p", group: "age", tone: "bad", label: "Over 15 days", value: num("age_15p"), hint: "Older than 15 days", href: tileHref(drill, { ageing: "15p" }) },
+    { key: "breach", group: "sla", tone: "bad", label: "SLA breached", value: num("breach"), hint: "Past the promise time", href: tileHref(drill, { breach: "1" }) },
+    { key: "risk", group: "sla", tone: "amber", label: "At risk", value: num("risk"), hint: "Likely to breach", href: tileHref(drill, { risk: "1" }) },
+    { key: "feedback_score", group: "feedback", tone: "good", label: "WhatsApp rating", value: num("feedback_score"), hint: "Average of 1 to 5", href: "/feedback" },
+    { key: "feedback_pending", group: "feedback", tone: "amber", label: "Ratings waiting", value: num("feedback_pending"), hint: "Closed visits with no score yet", href: "/feedback" },
+  ];
   const names = new Map(companyRows.map((company) => [company.id, company.shortName]));
   const loggedMap = new Map(loggedRows.map((row) => [dayKey(row.d), Number(row.n)]));
   const closedMap = new Map(closedRows.map((row) => [dayKey(row.d), Number(row.n)]));
@@ -392,23 +421,6 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
     return { date: key.slice(5), logged: loggedMap.get(key) ?? 0, closed: closedMap.get(key) ?? 0 };
   });
   const activeByCompany = new Map(companyActive.map((row) => [row.id, Number(row.n)]));
-  const gap = async (expr: Prisma.Sql) => prisma.$queryRaw<{ label: string; total: number; missing: number }[]>`
-    SELECT ${expr} AS label, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE "serialNorm" IS NULL)::int AS missing
-    FROM "Complaint" WHERE ${where}
-    GROUP BY 1
-    HAVING COUNT(*) FILTER (WHERE "serialNorm" IS NULL) > 0
-    ORDER BY missing DESC
-    LIMIT 8
-  `;
-  const [serialTotals, byState, byTechnician, bySource] = await Promise.all([
-    prisma.$queryRaw<{ total: number; missing: number }[]>`
-      SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE "serialNorm" IS NULL)::int AS missing
-      FROM "Complaint" WHERE ${where}
-    `,
-    gap(Prisma.raw(`COALESCE("stateName", 'Unknown')`)),
-    gap(Prisma.raw(`COALESCE("assignedName", 'Unassigned')`)),
-    gap(Prisma.raw(`COALESCE(source, 'Unknown')`)),
-  ]);
   const shape = (rows: { label: string; total: number; missing: number }[]): SerialGap[] => rows.map((row) => ({
     label: row.label,
     total: Number(row.total),
@@ -456,19 +468,6 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
 }
 
 export async function getDashboard(user: SessionUser, scope: string, filters: ComplaintFilters, dimension = "state", now = new Date()) {
-  if (process.env.VITEST) return computeDashboard(user, scope, filters, dimension, now);
-  const key = JSON.stringify({ user: user.id, scope, filters, dimension, bucket: Math.floor(now.getTime() / 5000) });
-  const cached = dashCache.get(key);
-  if (cached) return cached;
-  const pending = inflight.get(key);
-  if (pending) return pending;
-  const promise = computeDashboard(user, scope, filters, dimension, now)
-    .then((data) => {
-      dashCache.set(key, data);
-      if (dashCache.size > 80) dashCache.delete(dashCache.keys().next().value!);
-      return data;
-    })
-    .finally(() => inflight.delete(key));
-  inflight.set(key, promise);
-  return promise;
+  const key = JSON.stringify({ user: user.id, scope, filters, dimension });
+  return remember("dashboard", key, COUNT_TTL_MS, () => computeDashboard(user, scope, filters, dimension, now));
 }

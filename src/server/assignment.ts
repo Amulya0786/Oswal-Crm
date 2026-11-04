@@ -2,30 +2,33 @@ import { prisma } from "./db";
 import { rankEngineers, type AssignmentInput, type EngineerCandidate } from "@/lib/assignment";
 import { setting, settingNumber } from "./settings";
 import { kolkataTodayStart, midnightShift } from "@/lib/time";
+import { remember } from "./memory-cache";
 
-let statsCache: { at: number; open: Map<string, number>; rates: Map<string, number> } | null = null;
-
+/** Open complaints and average hours to close, one grouped scan, reused for a minute. */
 export async function engineerStats() {
-  if (!process.env.VITEST && statsCache && Date.now() - statsCache.at < 60_000) return statsCache;
-  const since = new Date(Date.now() - 90 * 86400000);
-  const rows = await prisma.$queryRaw<{ id: string; open: number; rate: number | null }[]>`
-    SELECT "engineerId" AS id,
-      COUNT(*) FILTER (WHERE status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
-      (COUNT(*) FILTER (WHERE status IN ('CLOSED','HAPPY_CALLING') AND "closedAt" >= ${since}))::float
-        / NULLIF(COUNT(*) FILTER (WHERE "bookDate" >= ${since}), 0) AS rate
-    FROM "Complaint"
-    WHERE "engineerId" IS NOT NULL AND "excludeFromMis" = false
-    GROUP BY "engineerId"
-  `;
-  const open = new Map<string, number>();
-  const rates = new Map<string, number>();
-  for (const row of rows) {
-    open.set(row.id, Number(row.open ?? 0));
-    if (row.rate != null) rates.set(row.id, Number(row.rate));
-  }
-  const snapshot = { at: Date.now(), open, rates };
-  if (!process.env.VITEST) statsCache = snapshot;
-  return snapshot;
+  return remember("engineer-stats", "all", 60_000, async () => {
+    const since = new Date(Date.now() - 90 * 86400000);
+    const rows = await prisma.$queryRaw<{ id: string; open: number; rate: number | null; hours: number | null }[]>`
+      SELECT "engineerId" AS id,
+        COUNT(*) FILTER (WHERE status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS open,
+        (COUNT(*) FILTER (WHERE status IN ('CLOSED','HAPPY_CALLING') AND "closedAt" >= ${since}))::float
+          / NULLIF(COUNT(*) FILTER (WHERE "bookDate" >= ${since}), 0) AS rate,
+        AVG(EXTRACT(EPOCH FROM ("closedAt" - "bookDate")) / 3600)
+          FILTER (WHERE status IN ('CLOSED','HAPPY_CALLING') AND "closedAt" IS NOT NULL AND "closedAt" >= ${since}) AS hours
+      FROM "Complaint"
+      WHERE "engineerId" IS NOT NULL AND "excludeFromMis" = false
+      GROUP BY "engineerId"
+    `;
+    const open = new Map<string, number>();
+    const rates = new Map<string, number>();
+    const hours = new Map<string, number>();
+    for (const row of rows) {
+      open.set(row.id, Number(row.open ?? 0));
+      if (row.rate != null) rates.set(row.id, Number(row.rate));
+      if (row.hours != null) hours.set(row.id, Number(row.hours));
+    }
+    return { at: Date.now(), open, rates, hours };
+  });
 }
 
 export async function suggestTechnicians(input: AssignmentInput) {
