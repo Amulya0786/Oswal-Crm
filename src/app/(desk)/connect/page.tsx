@@ -49,7 +49,7 @@ export default function ConnectPage() {
         <h2>Power BI</h2>
         <p>Get data → OData feed or Web, then paste:</p>
         <p className="mono">{odataUrl}</p>
-        <p>Other feeds: tickets, technicians, sla, ratings, scores, attendance. The same key works as the header x-report-key.</p>
+        <p>Other feeds: tickets, technicians, sla, ratings, scores. The same key works as the header x-report-key.</p>
       </section>
     </div>
   );

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, Map as MapIcon, PanelLeft, Search, Settings, Shield, Upload, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, PanelLeft, Search, Settings, Shield, Upload, Users } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { DESK_LABEL, type FieldLang } from "@/lib/i18n";
@@ -18,8 +18,6 @@ const GROUPS = [
     { href: "/complaints", label: "Complaints", icon: ClipboardList },
     { href: "/assign", label: "To assign", icon: ClipboardList },
     { href: "/customers", label: "Customers", icon: Users },
-    { href: "/map", label: "Map", icon: MapIcon },
-    { href: "/attendance", label: "Attendance", icon: Clock },
     { href: "/expenses", label: "Expenses", icon: ClipboardList },
     { href: "/leave", label: "Leave", icon: Clock },
     { href: "/contracts", label: "AMC", icon: ClipboardList },
@@ -43,8 +41,8 @@ const GROUPS = [
 
 const CRUMB: Record<string, string> = {
   complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
-  security: "Security", import: "Import", settings: "Settings", attendance: "Attendance", profile: "Profile",
-  exports: "Exports", customers: "Customers", assets: "Asset", map: "Map", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings", connect: "Power BI",
+  security: "Security", import: "Import", settings: "Settings", profile: "Profile",
+  exports: "Exports", customers: "Customers", assets: "Asset", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings", connect: "Power BI",
 };
 
 export function Shell({ user, scope, version, children }: { user: SessionUser; scope: string; version: number; children: React.ReactNode }) {
@@ -56,6 +54,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   const [lang, setLang] = useState<"en" | "hi">("en");
   const [q, setQ] = useState("");
   const [pendingRefresh, setPendingRefresh] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const [hits, setHits] = useState<{ complaints: { id: string; ticketNo: string; customerName: string; status: string }[]; customers: { id: string; name: string; phone: string }[]; engineers: { id: string; name: string }[] }>({ complaints: [], customers: [], engineers: [] });
   const current = user.companies.find((company) => company.id === scope);
   const logo = current?.code === "SOLAR" ? "SOLAR" : "PUMPS";
@@ -72,8 +71,6 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/leave") return false;
       if (item.href === "/engineers") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       if (item.href === "/health") return user.caps.security;
-      if (item.href === "/map") return user.role === "ADMIN" || user.role === "STATE_HEAD" || user.role === "AREA_MANAGER";
-      if (item.href === "/attendance") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       return true;
     }),
   })).filter((group) => group.items.length);
@@ -111,6 +108,10 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
   useEffect(() => {
     setPendingRefresh(false);
   }, [version]);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [path]);
 
   useEffect(() => {
     if (path.startsWith("/complaints/book")) return;
@@ -222,13 +223,14 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
               <div className="side-group">{DESK_LABEL[lang][group.label] ?? group.label}</div>
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const active = item.href === "/"
+                const matchesPath = item.href === "/"
                   ? path === "/"
                   : item.href === "/reports"
                     ? path === "/reports" || (path.startsWith("/reports/") && !path.startsWith("/reports/daily"))
                     : path.startsWith(item.href);
+                const active = pendingHref ? item.href === pendingHref : matchesPath;
                 const label = DESK_LABEL[lang][item.label] ?? item.label;
-                return <Link key={item.href} href={item.href} className={`side-link ${active ? "active" : ""}`}><Icon size={16} /><span>{label}</span></Link>;
+                return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`side-link ${active ? "active" : ""}`} onClick={() => { setPendingHref(item.href); setNavOpen(false); }}><Icon size={16} /><span>{label}</span></Link>;
               })}
             </div>
           ))}

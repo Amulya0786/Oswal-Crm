@@ -11,7 +11,6 @@ export type EngineerCandidate = {
   category?: string | null;
   brandId?: string | null;
   active: boolean;
-  punchedIn?: boolean;
   onLeave?: boolean;
   homeLat?: number | null;
   homeLng?: number | null;
@@ -125,11 +124,6 @@ export function scoreEngineer(
   } else if (input.brandId && /SERVICE|CENTRE|CENTER|OEM/i.test(engineer.kind) && skills.has("OEM")) {
     score += 12;
     reasons.push("Service centre");
-  }
-
-  if (engineer.punchedIn) {
-    score += 15;
-    reasons.push("Punched in");
   }
 
   const cap = input.dailyCap ?? 8;

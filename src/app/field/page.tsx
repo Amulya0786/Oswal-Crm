@@ -79,14 +79,14 @@ export default function FieldPage() {
       </header>
       <h1>{copy.title}</h1>
       {message && <div className="banner">{message}</div>}
-      {!visits.length && <EmptyState title={copy.empty} body={lang === "hi" ? "विज़िट में मैप, GPS, सीरियल या नेमप्लेट, फोटो, स्पेयर, हस्ताक्षर और ग्राहक OTP शामिल हैं।" : "A visit includes the map link, GPS check-in, serial scan or nameplate photo, before and after photos, the problem and solution, spares, a signature, and the customer OTP."} />}
+      {!visits.length && <EmptyState title={copy.empty} body={lang === "hi" ? "विज़िट में दिशा, GPS चेक-इन, सीरियल या नेमप्लेट, फोटो, स्पेयर, हस्ताक्षर और ग्राहक OTP शामिल हैं।" : "A visit includes directions, GPS check-in, serial scan or nameplate photo, before and after photos, the problem and solution, spares, a signature, and the customer OTP."} />}
       {visits.map((visit) => (
         <article key={visit.id} className="panel stack">
           <b className="mono">{visit.ticketNo}</b>
           <span>{visit.customerName} · {visit.phone}</span>
           <span className="muted">{visit.districtName} · {visit.pincode}</span>
           <span>{visit.productDetails}{visit.serialPending ? " · Serial pending" : ""}</span>
-          <a className="btn line" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([visit.address, visit.districtName, visit.pincode].filter(Boolean).join(", "))}`}>Map</a>
+          <a className="btn line" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([visit.address, visit.districtName, visit.pincode].filter(Boolean).join(", "))}`}>{lang === "hi" ? "दिशा" : "Directions"}</a>
           <div className="filters">
             <button className="btn line" onClick={() => void scanSerial(visit.id)}>{copy.scan}</button>
             <button className="btn" onClick={() => void send("/api/field/respond", { complaintId: visit.id, decision: "accept" })}>{lang === "hi" ? "स्वीकार" : "Accept"}</button>
@@ -97,13 +97,6 @@ export default function FieldPage() {
           <p className="muted">{copy.scan} · {copy.close} · {copy.hold}</p>
         </article>
       ))}
-      <section className="panel">
-        <h2>{copy.attendance}</h2>
-        <div className="filters">
-          <button className="btn" onClick={() => void send("/api/field/punch", { kind: "IN" })}>{copy.in}</button>
-          <button className="btn line" onClick={() => void send("/api/field/punch", { kind: "OUT" })}>{copy.out}</button>
-        </div>
-      </section>
       <section className="panel stack">
         <h2>{lang === "hi" ? "बंद करने के प्रमाण" : "Closing proof"}</h2>
         <p>{lang === "hi" ? "फोटो, हस्ताक्षर या OTP, और GPS" : "Photo, signature or OTP, and GPS"}</p>

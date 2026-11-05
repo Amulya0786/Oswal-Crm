@@ -88,6 +88,9 @@ describe("roles", () => {
   });
 
   it("keeps data health and import on the admin desk", () => {
+    expect(pathAllowed("ADMIN", "/map")).toBe(false);
+    expect(pathAllowed("ADMIN", "/attendance")).toBe(false);
+    expect(pathAllowed("STATE_HEAD", "/map")).toBe(false);
     expect(pathAllowed("ADMIN", "/health")).toBe(true);
     expect(pathAllowed("ADMIN", "/import")).toBe(true);
     expect(pathAllowed("CALL_CENTRE", "/health")).toBe(false);

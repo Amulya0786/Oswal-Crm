@@ -74,14 +74,6 @@ export async function GET(req: Request, context: { params: Promise<{ feed: strin
       select: { ticketNo: true, assignedName: true, happyRating: true, happyRemarks: true, happyAt: true },
     });
     rows = data.map((row) => ({ ...row, happyAt: row.happyAt?.toISOString() ?? "" }));
-  } else if (name === "attendance") {
-    const data = await prisma.attendancePunch.findMany({
-      where: bookDate ? { at: bookDate } : {},
-      orderBy: { at: "desc" },
-      take: 5000,
-      include: { engineer: { select: { name: true } } },
-    });
-    rows = data.map((row) => ({ at: row.at.toISOString(), technician: row.engineer.name, kind: row.kind, lat: row.lat, lng: row.lng }));
   } else if (name === "scores") {
     const engineers = await prisma.engineer.findMany({ where: { active: true }, take: 200 });
     rows = [];

@@ -13,7 +13,7 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
   if (user.mustChangePassword) redirect("/password");
   const pathname = (await headers()).get("x-pathname") ?? "/";
   if (!pathAllowed(user.role, pathname)) {
-    const denied = pathname.startsWith("/assign") ? "assign" : pathname.startsWith("/map") ? "map" : "page";
+    const denied = pathname.startsWith("/assign") ? "assign" : "page";
     redirect(`/?denied=${denied}`);
   }
   const version = await getVersion();

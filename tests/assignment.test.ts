@@ -13,7 +13,6 @@ const base: EngineerCandidate = {
   skills: "PUMPS,BREAKDOWN",
   category: "Domestic",
   active: true,
-  punchedIn: true,
 };
 
 describe("state-first assignment", () => {
@@ -41,6 +40,12 @@ describe("state-first assignment", () => {
       new Map([["e1", 0.2], ["e2", 0.8]]),
     );
     expect(ranked[0].closeRate).toBeGreaterThanOrEqual(ranked[1].closeRate);
+  });
+
+  it("does not score a punch-in bonus", () => {
+    const score = scoreEngineer(base, { companyId: "pumps", stateId: "hr" }, 1, 0.5);
+    expect(score.reason).not.toContain("Punched in");
+    expect(score.score).toBeGreaterThan(0);
   });
 
   it("flags the third repeat for a senior", () => {

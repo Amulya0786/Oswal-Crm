@@ -148,12 +148,6 @@ export async function fieldClose(user: SessionUser, complaintId: string, input: 
   return closed;
 }
 
-export async function punch(user: SessionUser, kind: "IN" | "OUT", lat?: number | null, lng?: number | null) {
-  const engineerId = requireTech(user);
-  if (lat != null && lng != null) await prisma.techPing.create({ data: { engineerId, lat, lng } });
-  return prisma.attendancePunch.create({ data: { engineerId, kind, lat: lat ?? null, lng: lng ?? null } });
-}
-
 export async function earnings(user: SessionUser) {
   if (!user.engineerId) return { visits: 0, rate: Number(process.env.VISIT_RATE ?? 0), amount: 0 };
   const start = new Date();

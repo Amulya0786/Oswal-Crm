@@ -1,6 +1,6 @@
 import { getScope, rejectTemporaryPassword } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
-import { checkIn, earnings, fieldClose, issueCloseOtp, punch, todayVisits } from "@/server/field";
+import { checkIn, earnings, fieldClose, issueCloseOtp, todayVisits } from "@/server/field";
 import { respondToOffer } from "@/server/assignment";
 import { updateComplaint } from "@/server/complaints";
 import { prisma } from "@/server/db";
@@ -19,12 +19,6 @@ export async function GET(_req: Request, context: { params: Promise<{ slug: stri
     if (slug[0] === "today") return json({ visits: await todayVisits(user) });
     if (slug[0] === "earnings") return json(await earnings(user));
     if (slug[0] === "parts") return json({ parts: await prisma.sparePart.findMany({ where: { active: true }, orderBy: { name: "asc" }, take: 200 }) });
-    if (slug[0] === "attendance") {
-      const rows = user.engineerId
-        ? await prisma.attendancePunch.findMany({ where: { engineerId: user.engineerId }, orderBy: { at: "desc" }, take: 30 })
-        : [];
-      return json({ rows });
-    }
     return json({ error: "Not found" }, 404);
   } catch (error) {
     return fail(error);
@@ -54,7 +48,6 @@ export async function POST(req: Request, context: { params: Promise<{ slug: stri
       if (!complaint) return json({ error: "Visit not found" }, 404);
       return json(await updateComplaint(user, complaint.companyId, complaint.id, { action: "hold", holdReason: body.reason }));
     }
-    if (slug[0] === "punch") return json(await punch(user, body.kind === "OUT" ? "OUT" : "IN", body.lat, body.lng));
     if (slug[0] === "ping") {
       if (!user.engineerId) return json({ error: "Technician login required" }, 403);
       await prisma.techPing.create({ data: { engineerId: user.engineerId, lat: Number(body.lat), lng: Number(body.lng) } });

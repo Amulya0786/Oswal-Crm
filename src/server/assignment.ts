@@ -44,13 +44,10 @@ export async function suggestTechnicians(input: AssignmentInput) {
     engineerStats(),
   ]);
   const ids = engineers.map((engineer) => engineer.id);
-  const [punches, leaves, pings] = await Promise.all([
-    ids.length ? prisma.attendancePunch.findMany({ where: { engineerId: { in: ids }, at: { gte: today, lt: tomorrow } }, orderBy: { at: "desc" } }) : [],
+  const [leaves, pings] = await Promise.all([
     ids.length ? prisma.leaveRequest.findMany({ where: { engineerId: { in: ids }, status: "APPROVED", from: { lte: tomorrow }, to: { gte: today } } }) : [],
     ids.length ? prisma.techPing.findMany({ where: { engineerId: { in: ids } }, orderBy: { at: "desc" }, take: Math.max(ids.length * 2, 20) }) : [],
   ]);
-  const punched = new Map<string, string>();
-  for (const punch of punches) if (!punched.has(punch.engineerId)) punched.set(punch.engineerId, punch.kind);
   const onLeave = new Set(leaves.map((row) => row.engineerId));
   const latest = new Map<string, { lat: number; lng: number }>();
   for (const ping of pings) if (!latest.has(ping.engineerId)) latest.set(ping.engineerId, { lat: ping.lat, lng: ping.lng });
@@ -67,7 +64,6 @@ export async function suggestTechnicians(input: AssignmentInput) {
     category: engineer.category,
     brandId: engineer.brandId,
     active: engineer.active,
-    punchedIn: punched.get(engineer.id) === "IN",
     onLeave: onLeave.has(engineer.id),
     homeLat: engineer.homeLat,
     homeLng: engineer.homeLng,

@@ -154,46 +154,6 @@ async function route(method: string, slug: string[], req: Request) {
     return json(note);
   }
 
-  if (method === "GET" && head === "map") {
-    const company = scope === "all" ? {} : { companyId: scope };
-    const date = url.searchParams.get("date");
-    const engineerId = url.searchParams.get("engineerId");
-    const dayStart = date ? new Date(`${date}T00:00:00+05:30`) : null;
-    const dayEnd = dayStart ? new Date(dayStart.getTime() + 86400000) : null;
-    const trail = dayStart && dayEnd
-      ? await prisma.techPing.findMany({
-          where: { ...(engineerId ? { engineerId } : {}), at: { gte: dayStart, lt: dayEnd } },
-          orderBy: { at: "asc" },
-          take: 2000,
-          include: { engineer: { select: { name: true } } },
-        })
-      : [];
-    const [complaints, engineers] = await Promise.all([
-      prisma.complaint.findMany({
-        where: { ...company, status: { in: ["OPEN", "ASSIGNED", "REASSIGNED", "PENDING"] }, lat: { not: null }, lng: { not: null }, excludeFromMis: false },
-        take: 400,
-        select: { id: true, ticketNo: true, status: true, lat: true, lng: true, bookDate: true, districtName: true, customerName: true },
-      }),
-      prisma.engineer.findMany({
-        where: { ...company, active: true },
-        take: 200,
-        select: { id: true, name: true, homeLat: true, homeLng: true, phone: true, locations: { orderBy: { at: "desc" }, take: 1 } },
-      }),
-    ]);
-    return json({
-      provider: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || process.env.GOOGLE_MAPS_KEY ? "google" : "osm",
-      trail: trail.map((ping) => ({ engineerId: ping.engineerId, name: ping.engineer.name, lat: ping.lat, lng: ping.lng, at: ping.at })),
-      complaints,
-      engineers: engineers.map((engineer) => ({
-        id: engineer.id,
-        name: engineer.name,
-        phone: engineer.phone,
-        lat: engineer.locations[0]?.lat ?? engineer.homeLat,
-        lng: engineer.locations[0]?.lng ?? engineer.homeLng,
-      })).filter((engineer) => engineer.lat != null && engineer.lng != null),
-    });
-  }
-
   if (head === "scorecards" && method === "GET") {
     if (!user.caps.report) return json({ error: "Reports only" }, 403);
     const data = await loadScorecards(user, scope);
