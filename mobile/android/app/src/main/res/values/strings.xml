@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Oswal Service</string>
+    <string name="title_activity_main">Oswal Service</string>
+    <string name="package_name">com.oswal.service</string>
+    <string name="custom_url_scheme">com.oswal.service</string>
+</resources>

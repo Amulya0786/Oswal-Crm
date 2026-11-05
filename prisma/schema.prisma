@@ -1,0 +1,1144 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations use the direct database. The app may point DATABASE_URL at PgBouncer.
+  directUrl = env("DIRECT_URL")
+}
+
+model Company {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  legalName     String
+  shortName     String
+  accent        String
+  logoText      String
+  tagline       String
+  phone         String?
+  email         String?
+  address       String?
+  active        Boolean  @default(true)
+  memberships   UserCompany[]
+  products      Product[]
+  customers     Customer[]
+  engineers     Engineer[]
+  brands        Brand[]
+  complaints    Complaint[]
+  slas          SlaPolicy[]
+  rules         Rule[]
+  templates     NotificationTemplate[]
+  beneficiaries Beneficiary[]
+  webhooks      WebhookEndpoint[]
+  assets        Asset[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String
+  phone        String?
+  active             Boolean  @default(true)
+  mustChangePassword Boolean @default(false)
+  isTest             Boolean  @default(false)
+  failedLogins       Int      @default(0)
+  lockedUntil        DateTime?
+  totpSecret         String?
+  totpEnabled        Boolean  @default(false)
+  totpSetupHash      String?
+  totpSetupExpires   DateTime?
+  resetTokenHash     String?
+  resetExpires       DateTime?
+  engineerId   String?  @unique
+  createdAt    DateTime @default(now())
+
+  engineer            Engineer?     @relation(fields: [engineerId], references: [id], onDelete: SetNull)
+  memberships         UserCompany[]
+  states              UserState[]
+  districts           UserDistrict[]
+  brands              UserBrand[]
+  sessions            Session[]
+  logins              LoginHistory[]
+  views               SavedView[]
+  audits              AuditLog[]
+  createdComplaints   Complaint[]   @relation("CreatedComplaints")
+  escalatedComplaints Complaint[]   @relation("EscalatedComplaints")
+  notes               ComplaintNote[]
+  exportJobs          ExportJob[]
+}
+
+model UserCompany {
+  userId    String
+  companyId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
+}
+
+model UserState {
+  userId  String
+  stateId String
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state   State @relation(fields: [stateId], references: [id], onDelete: Cascade)
+
+  @@id([userId, stateId])
+}
+
+model UserDistrict {
+  userId     String
+  districtId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@id([userId, districtId])
+}
+
+model UserBrand {
+  userId  String
+  brandId String
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand   Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([userId, brandId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  userId    String?
+  email     String
+  success   Boolean
+  ip        String?
+  userAgent String?
+  note      String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([at])
+  @@index([userId, at])
+}
+
+model State {
+  id         String         @id @default(cuid())
+  name       String         @unique
+  code       String?
+  zone       String?
+  districts  District[]
+  users      UserState[]
+  complaints Complaint[]
+  customers  Customer[]
+  engineers  Engineer[]
+}
+
+model District {
+  id         String         @id @default(cuid())
+  name       String
+  stateId    String
+  state      State          @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  areas      Area[]
+  pincodes   Pincode[]
+  users      UserDistrict[]
+  complaints Complaint[]
+  customers  Customer[]
+  engineers  Engineer[]
+  aliases    DistrictAlias[]
+  active       Boolean  @default(true)
+  mergedIntoId String?
+  lgdCode      String?
+  mergedInto   District?  @relation("DistrictMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   District[] @relation("DistrictMerge")
+  tehsils      Tehsil[]
+  cities       City[]
+  placeAliases PlaceAlias[]
+  engineerLinks EngineerDistrict[]
+
+  @@unique([stateId, name])
+  @@index([stateId])
+  @@index([mergedIntoId])
+}
+
+model DistrictAlias {
+  alias      String   @id
+  districtId String
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@index([districtId])
+}
+
+model Area {
+  id         String      @id @default(cuid())
+  name       String
+  districtId String
+  district   District    @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  pincodes   Pincode[]
+  complaints Complaint[]
+  customers  Customer[]
+  active     Boolean @default(true)
+
+  @@unique([districtId, name])
+  @@index([districtId])
+}
+
+model Pincode {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  districtId        String
+  areaId            String?
+  blockId           String?
+  cityId            String?
+  urban             Boolean  @default(false)
+  blockApproximate  Boolean  @default(false)
+  district          District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  area              Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  block             Tehsil?  @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  city              City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+
+  @@index([districtId])
+  @@index([blockId])
+  @@index([cityId])
+}
+
+model Category {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  companyCode String      @default("PUMPS")
+  products    Product[]
+  complaints  Complaint[]
+}
+
+model HsnCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  description String
+  products    Product[]
+}
+
+model PumpHead {
+  id       String    @id @default(cuid())
+  label    String    @unique
+  products Product[]
+}
+
+model HpCapacity {
+  id       String    @id @default(cuid())
+  label    String    @unique
+  products Product[]
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  companyId   String
+  name        String
+  sku         String
+  categoryId  String?
+  hsnId       String?
+  pumpHeadId  String?
+  hpId        String?
+  type        String
+  description String?
+  active      Boolean     @default(true)
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category    Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  hsn         HsnCode?    @relation(fields: [hsnId], references: [id], onDelete: SetNull)
+  pumpHead    PumpHead?   @relation(fields: [pumpHeadId], references: [id], onDelete: SetNull)
+  hp          HpCapacity? @relation(fields: [hpId], references: [id], onDelete: SetNull)
+  complaints  Complaint[]
+  assets      Asset[]
+
+  @@unique([companyId, sku])
+  @@index([companyId])
+  @@index([categoryId])
+}
+
+model Customer {
+  id         String      @id @default(cuid())
+  companyId  String
+  name       String
+  phone      String
+  altPhone   String?
+  email      String?
+  address    String?
+  stateId    String?
+  districtId String?
+  areaId     String?
+  pincode    String?
+  isTest       Boolean     @default(false)
+  phoneNorm    String?     @unique
+  nameNorm     String?
+  village      String?
+  mergedIntoId String?
+  mergedInto   Customer?   @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Customer[]  @relation("CustomerMerge")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  state        State?      @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  district     District?   @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  area         Area?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  complaints   Complaint[]
+  phones       CustomerPhone[]
+  assets       Asset[]
+
+  @@unique([companyId, phone])
+  @@index([phone])
+  @@index([companyId])
+  @@index([nameNorm, pincode])
+  @@index([mergedIntoId])
+}
+
+model CustomerPhone {
+  id         String   @id @default(cuid())
+  customerId String
+  phoneNorm  String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+model Asset {
+  id            String      @id @default(cuid())
+  companyId     String
+  customerId    String
+  productId     String?
+  productName   String?
+  modelName     String?
+  serialNorm    String?
+  capacityLabel String?
+  identityKey   String      @unique
+  installedAt   DateTime?
+  warrantyUntil DateTime?
+  amcUntil      DateTime?
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product       Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  complaints    Complaint[]
+
+  @@index([customerId])
+  @@index([serialNorm])
+  @@index([productId])
+  @@index([companyId])
+}
+
+model Engineer {
+  id         String      @id @default(cuid())
+  companyId  String
+  name       String
+  phone      String?
+  kind       String
+  stateId    String?
+  districtId String?
+  pincodes   String      @default("")
+  skills       String   @default("")
+  homeLat    Float?
+  homeLng    Float?
+  active       Boolean  @default(true)
+  employeeCode String?  @unique
+  mergedIntoId String?
+  mergedInto   Engineer?  @relation("EngineerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Engineer[] @relation("EngineerMerge")
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  state      State?      @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  district   District?   @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  login      User?
+  complaints Complaint[]
+  locations  TechPing[]
+  punches    AttendancePunch[]
+  category       String?
+  signaturePath  String?
+  brandId        String?
+  coveredDistricts EngineerDistrict[]
+  stateHistory     EngineerStateHistory[]
+  leaves           LeaveRequest[]
+  expenses         ExpenseClaim[]
+
+  @@index([companyId, active])
+  @@index([districtId])
+  @@index([stateId])
+}
+
+model Brand {
+  id         String      @id @default(cuid())
+  companyId  String
+  name       String
+  active     Boolean     @default(true)
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users      UserBrand[]
+  complaints Complaint[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model ComplaintIssue {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  complaints Complaint[]
+}
+
+model ComplaintSource {
+  id   String @id @default(cuid())
+  code String @unique
+  name String @unique
+}
+
+model HoldStatus {
+  id   String @id @default(cuid())
+  name String @unique
+  code String? @unique
+}
+
+model ProblemCategory {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  sort       Int         @default(0)
+  complaints Complaint[]
+}
+
+model SerialUnit {
+  id           String  @id @default(cuid())
+  serial       String
+  companyId    String
+  customerId   String?
+  customerName String?
+  productId    String?
+  productName  String?
+
+  @@unique([companyId, serial])
+  @@index([serial])
+}
+
+model CheckItem {
+  id     String           @id @default(cuid())
+  name   String
+  sort   Int              @default(0)
+  checks ComplaintCheck[]
+}
+
+model ActualProblem {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  complaints Complaint[]
+}
+
+model ActualSolution {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  complaints Complaint[]
+}
+
+model Beneficiary {
+  id           String  @id @default(cuid())
+  companyId    String
+  name         String
+  phone        String?
+  saralId      String?
+  districtName String?
+  scheme       String?
+  notes        String?
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([saralId])
+}
+
+model TicketCounter {
+  dateKey String @id
+  lastSeq Int
+}
+
+model DataVersion {
+  id      Int @id
+  version Int @default(0)
+}
+
+model Complaint {
+  id                String    @id @default(cuid())
+  ticketNo          String    @unique
+  trackToken        String?   @unique
+  companyId         String
+  bookDate          DateTime
+  scheduleDate      DateTime?
+  customerId        String?
+  customerName      String
+  phone             String
+  altPhone          String?
+  address           String?
+  stateId           String?
+  districtId        String?
+  areaId            String?
+  stateName         String?
+  districtName      String?
+  areaName          String?
+  pincode           String?
+  callType          String
+  categoryId        String?
+  categoryName      String?
+  productId         String?
+  productDetails    String?
+  serialNo          String?
+  serialNorm        String?
+  serialPending     Boolean   @default(false)
+  serialUnavailableReason String?
+  missingSerialReason String?
+  nameplatePhoto    Boolean   @default(false)
+  serialCustomerMismatch Boolean @default(false)
+  natureId          String?
+  natureText        String?
+  source            String    @default("CALL")
+  callBy            String?
+  priority          String    @default("NORMAL")
+  status            String    @default("OPEN")
+  finalStatus       String?
+  engineerId        String?
+  assignedName      String?
+  assignedAt        DateTime?
+  brandId           String?
+  brandName         String?
+  saralId           String?
+  msedclConsumerNo  String?
+  msedclSubdivision String?
+  schemeName        String?
+  holdReason        String?
+  holdCode          String?
+  holdAt            DateTime?
+  cancelReason      String?
+  cancelledAt       DateTime?
+  actualProblemId   String?
+  actualProblem     String?
+  actualSolutionId  String?
+  actualSolution    String?
+  happyRating       Int?
+  happyRemarks      String?
+  happyAt           DateTime?
+  closedAt          DateTime?
+  solvedAt          DateTime?
+  closureProof      String?
+  channel           String    @default("FIELD")
+  capacityLabel     String?
+  headLabel         String?
+  problemCategoryId String?
+  problemNote       String?
+  secondaryCategories String?
+  excludeFromMis    Boolean   @default(false)
+  duplicateOfTicket String?
+  duplicateOverrideReason String?
+  firstTimeFix      Boolean?
+  slaDueAt          DateTime?
+  slaHours          Int?
+  slaBreached       Boolean   @default(false)
+  slaRisk           Boolean   @default(false)
+  slaRiskReason     String?
+  repeatFlag        Boolean   @default(false)
+  repeatReason      String?
+  repeatOfTicket    String?
+  repeatWindow      Int?
+  assetId           String?
+  assignReason      String?
+  lat               Float?
+  lng               Float?
+  feedbackPending   Boolean   @default(false)
+  closeLat          Float?
+  closeLng          Float?
+  closeDistanceKm   Float?
+  gpsFar            Boolean   @default(false)
+  aiSummary         String?
+  escalationLevel   Int       @default(0)
+  escalatedToId     String?
+  escalatedAt       DateTime?
+  createdById       String?
+  email             String?
+  purchaseDate      DateTime?
+  portal            String?
+  subType           String?
+  msedclRequestNo   String?
+  msedclStatus      String?
+  requestSubtype    String?
+  msedclVideoUrl    String?
+  version           Int       @default(0)
+  qaFlag            Boolean   @default(false)
+  callbackDueAt     DateTime?
+  idempotencyKey    String?   @unique
+  tehsilId          String?
+  cityId            String?
+  serviceCharge     Float?
+  spareCharge       Float?
+  paymentNote       String?
+  paidAt            DateTime?
+  suggestedEngineerId String?
+  suggestedName     String?
+  offeredAt         DateTime?
+  acceptedAt        DateTime?
+  seniorReview      Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer    Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  state       State?          @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  district    District?       @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  area        Area?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  product     Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  nature      ComplaintIssue? @relation(fields: [natureId], references: [id], onDelete: SetNull)
+  engineer    Engineer?       @relation(fields: [engineerId], references: [id], onDelete: SetNull)
+  brand       Brand?          @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  problem     ActualProblem?  @relation(fields: [actualProblemId], references: [id], onDelete: SetNull)
+  solution    ActualSolution? @relation(fields: [actualSolutionId], references: [id], onDelete: SetNull)
+  createdBy   User?           @relation("CreatedComplaints", fields: [createdById], references: [id], onDelete: SetNull)
+  escalatedTo User?           @relation("EscalatedComplaints", fields: [escalatedToId], references: [id], onDelete: SetNull)
+
+  events      ComplaintEvent[]
+  visits      VisitCheck[]
+  media       FieldMedia[]
+  calls       CallLog[]
+  voiceNotes  VoiceNote[]
+  notes       ComplaintNote[]
+  attachments Attachment[]
+  checks          ComplaintCheck[]
+  escalations     EscalationLog[]
+  spares          SpareRequest[]
+  problemCategory ProblemCategory? @relation(fields: [problemCategoryId], references: [id], onDelete: SetNull)
+  asset           Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, bookDate])
+  @@index([companyId, stateId, status])
+  @@index([stateId, status])
+  @@index([engineerId, bookDate])
+  @@index([brandId, bookDate])
+  @@index([status, bookDate])
+  @@index([districtId, status])
+  @@index([engineerId, status])
+  @@index([bookDate])
+  @@index([slaDueAt])
+  @@index([phone])
+  @@index([serialNo])
+  @@index([customerId])
+  @@index([productId, status])
+  @@index([brandId, status])
+  @@index([callType, status])
+  @@index([createdById])
+  @@index([saralId])
+  @@index([pincode])
+  @@index([closedAt])
+  @@index([happyAt])
+  @@index([cancelledAt])
+  @@index([escalationLevel, status])
+  @@index([companyId, bookDate])
+  @@index([excludeFromMis, status])
+  @@index([serialNorm])
+  @@index([serialPending, status])
+  @@index([channel, status])
+  @@index([solvedAt])
+  @@index([holdCode, status])
+  @@index([assetId, bookDate])
+  @@index([repeatOfTicket])
+  @@index([repeatWindow])
+}
+
+model SpareRequest {
+  id           String    @id @default(cuid())
+  complaintId  String
+  partName     String
+  qty          Int       @default(1)
+  status       String    @default("REQUESTED")
+  requestedAt  DateTime  @default(now())
+  dispatchedAt DateTime?
+  receivedAt   DateTime?
+  complaint    Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, status])
+}
+
+model ComplaintEvent {
+  id          String    @id @default(cuid())
+  complaintId String
+  at          DateTime  @default(now())
+  actorId     String?
+  actorName   String?
+  type        String
+  message     String
+  meta        String?
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, at])
+  @@index([at])
+}
+
+model ComplaintNote {
+  id          String    @id @default(cuid())
+  complaintId String
+  userId      String?
+  body        String
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([complaintId])
+}
+
+model Attachment {
+  id          String    @id @default(cuid())
+  complaintId String
+  fileName    String
+  mime        String?
+  size        Int?
+  path        String
+  createdAt   DateTime  @default(now())
+  uploadedBy  String?
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+}
+
+model ComplaintCheck {
+  id          String    @id @default(cuid())
+  complaintId String
+  itemId      String
+  checked     Boolean   @default(false)
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  item        CheckItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([complaintId, itemId])
+}
+
+model SlaPolicy {
+  id          String  @id @default(cuid())
+  companyId   String
+  callType    String
+  hours       Int
+  callbackHours Int   @default(24)
+  warnPercent Int     @default(75)
+  active      Boolean @default(true)
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, callType])
+}
+
+model Rule {
+  id         String    @id @default(cuid())
+  companyId  String?
+  name       String
+  active     Boolean   @default(true)
+  definition String
+  createdAt  DateTime  @default(now())
+  company    Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fires      RuleFire[]
+
+  @@index([active])
+}
+
+model RuleFire {
+  id          String   @id @default(cuid())
+  ruleId      String
+  complaintId String
+  firedAt     DateTime @default(now())
+  detail      String?
+  rule        Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, complaintId])
+  @@index([complaintId])
+}
+
+model EscalationLog {
+  id          String    @id @default(cuid())
+  complaintId String
+  at          DateTime  @default(now())
+  fromLevel   Int
+  toLevel     Int
+  toUserId    String?
+  toName      String?
+  message     String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([at])
+  @@index([complaintId])
+}
+
+model NotificationTemplate {
+  id        String  @id @default(cuid())
+  companyId String
+  event     String
+  channel   String
+  subject   String?
+  body      String
+  active    Boolean @default(true)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, event, channel])
+}
+
+model NotificationLog {
+  id          String   @id @default(cuid())
+  at          DateTime @default(now())
+  companyId   String?
+  complaintId String?
+  channel     String
+  recipient   String
+  event       String?
+  body        String
+  provider    String
+  status      String
+  detail      String?
+
+  @@index([at])
+  @@index([complaintId])
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  entity    String
+  filters   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entity, name])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  userId    String?
+  companyId String?
+  entity    String
+  entityId  String?
+  action    String
+  summary   String
+  before    Json?
+  after     Json?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([at])
+  @@index([entity, entityId])
+}
+
+model WebhookEndpoint {
+  id         String            @id @default(cuid())
+  companyId  String?
+  url        String
+  secret     String?
+  events     String
+  active     Boolean           @default(true)
+  company    Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id         String          @id @default(cuid())
+  endpointId String
+  event      String
+  payload    String
+  status     String
+  response   String?
+  at         DateTime        @default(now())
+  endpoint   WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([at])
+}
+
+model ExportJob {
+  id         String    @id @default(cuid())
+  userId     String?
+  kind       String
+  params     String
+  status     String
+  filePath   String?
+  fileName   String?
+  rowCount   Int?
+  error      String?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+model OtpChallenge {
+  id        String   @id @default(cuid())
+  phone     String
+  ticketNo  String?
+  code      String
+  purpose   String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([phone, purpose])
+}
+
+model AppSetting {
+  key   String @id
+  value String
+}
+
+model WhatsAppOptOut {
+  phoneNorm String   @id
+  at        DateTime @default(now())
+  source    String?
+}
+
+model TechPing {
+  id         String   @id @default(cuid())
+  engineerId String
+  lat        Float
+  lng        Float
+  at         DateTime @default(now())
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, at])
+}
+
+model VisitCheck {
+  id          String    @id @default(cuid())
+  complaintId String
+  engineerId  String?
+  kind        String
+  lat         Float?
+  lng         Float?
+  at          DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, at])
+}
+
+model FieldMedia {
+  id          String    @id @default(cuid())
+  complaintId String
+  kind        String
+  note        String?
+  path        String
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, kind])
+}
+
+model AttendancePunch {
+  id         String   @id @default(cuid())
+  engineerId String
+  kind       String
+  lat        Float?
+  lng        Float?
+  at         DateTime @default(now())
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, at])
+}
+
+model SparePart {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  sku    String?
+  active Boolean @default(true)
+}
+
+model VoiceNote {
+  id          String    @id @default(cuid())
+  complaintId String
+  actorId     String?
+  lang        String    @default("en")
+  path        String
+  transcript  String
+  provider    String    @default("mock")
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+}
+
+model ProofRule {
+  callType       String  @id
+  requirePhoto   Boolean @default(true)
+  requireIdentity Boolean @default(true)
+  requireGps     Boolean @default(true)
+  maxKm          Float   @default(15)
+}
+
+model CallLog {
+  id          String    @id @default(cuid())
+  phone       String
+  complaintId String?
+  direction   String    @default("IN")
+  note        String?
+  at          DateTime  @default(now())
+  complaint   Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+
+  @@index([phone, at])
+  @@index([complaintId])
+}
+
+model WhatsAppSession {
+  phone     String   @id
+  lang      String   @default("en")
+  step      String   @default("menu")
+  draft     String   @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model Callback {
+  id        String   @id @default(cuid())
+  phone     String
+  name      String?
+  note      String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+}
+
+model ReportKey {
+  id        String    @id @default(cuid())
+  name      String
+  keyHash   String    @unique
+  prefix    String
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+  expiresAt DateTime?
+  lastUsedAt DateTime?
+  stateId   String?
+  brandId   String?
+}
+
+model Scheme {
+  id   String @id @default(cuid())
+  name String @unique
+}
+
+model PlaceAlias {
+  id         String   @id @default(cuid())
+  kind       String
+  stateName  String
+  alias      String
+  districtId String
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([kind, stateName, alias])
+  @@index([districtId])
+}
+
+model Tehsil {
+  id         String   @id @default(cuid())
+  name       String
+  districtId String
+  lgdCode    String?
+  active     Boolean  @default(true)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  pincodes   Pincode[]
+
+  @@unique([districtId, name])
+  @@index([districtId])
+  @@index([lgdCode])
+}
+
+model City {
+  id         String    @id @default(cuid())
+  name       String
+  districtId String
+  kind       String?
+  pincodes   String    @default("")
+  lgdCode    String?
+  active     Boolean   @default(true)
+  district   District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  pins       Pincode[]
+
+  @@unique([districtId, name])
+  @@index([districtId])
+}
+
+model EngineerDistrict {
+  engineerId String
+  districtId String
+  engineer   Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+  district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@id([engineerId, districtId])
+}
+
+model EngineerStateHistory {
+  id         String    @id @default(cuid())
+  engineerId String
+  stateId    String?
+  from       DateTime  @default(now())
+  note       String?
+  engineer   Engineer  @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, from])
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  engineerId  String
+  from        DateTime
+  to          DateTime
+  reason      String
+  status      String    @default("PENDING")
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  engineer    Engineer  @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, status])
+}
+
+model ExpenseClaim {
+  id          String   @id @default(cuid())
+  engineerId  String
+  complaintId String?
+  type        String
+  amount      Float
+  detail      String?
+  billPath    String?
+  at          DateTime @default(now())
+  status      String   @default("SUBMITTED")
+  engineer    Engineer @relation(fields: [engineerId], references: [id], onDelete: Cascade)
+
+  @@index([engineerId, at])
+}
+
+model ServiceContract {
+  id          String    @id @default(cuid())
+  companyId   String
+  customerId  String?
+  assetId     String?
+  productName String?
+  visitsIncluded Int?
+  start       DateTime
+  end         DateTime
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now())
+
+  @@index([end, status])
+  @@index([companyId])
+}
+
+model DeskAlert {
+  id          String    @id @default(cuid())
+  kind        String
+  message     String
+  complaintId String?
+  stateId     String?
+  engineerId  String?
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  @@index([stateId, readAt])
+  @@index([kind, createdAt])
+}

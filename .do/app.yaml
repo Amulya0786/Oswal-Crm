@@ -1,0 +1,101 @@
+# DigitalOcean App Platform. App and database in Bangalore (blr).
+# Photos go to the private Space oswal-service-files in Singapore (sgp1).
+# WhatsApp, SMS, speech, AI and push are left unset.
+name: oswal-service
+region: blr
+
+services:
+  - name: web
+    github:
+      repo: Amulya0786/Oswal-Crm
+      branch: cursor/oswal-service-crm-5f17
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 20
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 9
+
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: Amulya0786/Oswal-Crm
+      branch: cursor/oswal-service-crm-5f17
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    run_command: node scripts/migrate.mjs && node scripts/bootstrap.mjs
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 1
+
+databases:
+  - name: oswal-db
+    engine: PG
+    version: "16"
+    production: true
+    cluster_name: oswal-pg
+
+envs:
+  - key: DATABASE_URL
+    scope: RUN_TIME
+    value: ${oswal-db.DATABASE_URL}
+  # Direct connection for prisma migrate. Keep this on the database, not the pooler.
+  # When DATABASE_URL is switched to the PgBouncer URL, leave DIRECT_URL as ${oswal-db.DATABASE_URL}.
+  - key: DIRECT_URL
+    scope: RUN_TIME
+    value: ${oswal-db.DATABASE_URL}
+  - key: APP_URL
+    scope: RUN_TIME
+    value: ${APP_URL}
+  - key: IMPORT_CUTOFF
+    scope: RUN_TIME
+    value: "2026-04-01"
+  - key: NEXT_PUBLIC_DEMO_HINTS
+    scope: RUN_AND_BUILD_TIME
+    value: "0"
+  - key: ENABLE_JOBS
+    scope: RUN_TIME
+    value: "1"
+  - key: S3_ENDPOINT
+    scope: RUN_TIME
+    value: https://sgp1.digitaloceanspaces.com
+  - key: S3_REGION
+    scope: RUN_TIME
+    value: sgp1
+  - key: S3_BUCKET
+    scope: RUN_TIME
+    value: oswal-service-files
+  - key: S3_ACCESS_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: enter-spaces-key
+  - key: S3_SECRET_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: enter-spaces-secret
+  - key: AUTH_SECRET
+    scope: RUN_TIME
+    type: SECRET
+    value: enter-a-long-random-auth-secret
+  - key: CRON_SECRET
+    scope: RUN_TIME
+    type: SECRET
+    value: enter-a-long-random-cron-secret
+  - key: OSWAL_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: enter-a-long-random-api-key
+  - key: ADMIN_EMAIL
+    scope: RUN_TIME
+    type: SECRET
+    value: set-admin-email
+  - key: ADMIN_INITIAL_PASSWORD
+    scope: RUN_TIME
+    type: SECRET
+    value: change
