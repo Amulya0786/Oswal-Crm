@@ -75,6 +75,7 @@ export type ComplaintFilters = {
   dateOn?: string;
   hold?: string;
   reassigned?: string;
+  archived?: string;
   brandId?: string;
   priority?: string;
   source?: string;

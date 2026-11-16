@@ -109,27 +109,56 @@ export const getScope = cache(async () => {
   return { user, scope: user.companyIds[0] ?? "all" };
 });
 
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_FAIL_LIMIT = 5;
+
+async function ipLocked(ip: string) {
+  const since = new Date(Date.now() - LOGIN_WINDOW_MS);
+  const fails = await prisma.loginHistory.count({ where: { ip, success: false, at: { gte: since }, note: "failed" } });
+  return fails >= LOGIN_FAIL_LIMIT;
+}
+
+export async function recordLogin(action: "LOGIN" | "LOGIN_FAILED" | "LOGIN_LOCKED", userId: string | undefined, summary: string) {
+  await prisma.auditLog.create({
+    data: { userId, entity: "Login", entityId: userId, action, summary: summary.slice(0, 240) },
+  });
+}
+
 export async function login(email: string, password: string, meta: { ip?: string; userAgent?: string; totp?: string }) {
   const normalized = email.trim().toLowerCase();
+  const ip = meta.ip;
+  const agent = meta.userAgent?.slice(0, 240);
+  if (ip && (await ipLocked(ip))) {
+    await prisma.loginHistory.create({ data: { email: normalized, success: false, ip, userAgent: agent, note: "ip-locked" } });
+    await recordLogin("LOGIN_LOCKED", undefined, `Too many sign-in attempts from ${ip}`);
+    return { locked: true as const };
+  }
   const user = await prisma.user.findUnique({ where: { email: normalized }, include: userInclude });
   if (user?.lockedUntil && user.lockedUntil > new Date()) {
-    await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip: meta.ip, userAgent: meta.userAgent?.slice(0, 240), note: "locked" } });
+    await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip, userAgent: agent, note: "locked" } });
+    await recordLogin("LOGIN_LOCKED", user.id, `Account locked for ${normalized}`);
     return { locked: true as const };
   }
   const ok = Boolean(user && user.active && (await bcrypt.compare(password, user.passwordHash)));
   await prisma.loginHistory.create({
-      data: { userId: user?.id, email: normalized, success: ok, ip: meta.ip, userAgent: meta.userAgent?.slice(0, 240), note: ok ? null : "failed" },
+    data: { userId: user?.id, email: normalized, success: ok, ip, userAgent: agent, note: ok ? null : "failed" },
   });
   if (!ok || !user) {
     if (user) {
       const failed = user.failedLogins + 1;
+      const locked = failed >= LOGIN_FAIL_LIMIT;
       await prisma.user.update({
         where: { id: user.id },
-        data: { failedLogins: failed, lockedUntil: failed >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null },
+        data: { failedLogins: failed, lockedUntil: locked ? new Date(Date.now() + LOGIN_WINDOW_MS) : null },
       });
-      if (failed >= 5) {
-        await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip: meta.ip, note: "locked for 15 minutes" } });
+      if (locked) {
+        await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip, note: "locked for 15 minutes" } });
+        await recordLogin("LOGIN_LOCKED", user.id, `Account locked for 15 minutes after failed sign-in (${normalized})`);
+      } else {
+        await recordLogin("LOGIN_FAILED", user.id, `Failed sign-in for ${normalized}`);
       }
+    } else {
+      await recordLogin("LOGIN_FAILED", undefined, `Failed sign-in for ${normalized}`);
     }
     return null;
   }
@@ -138,9 +167,22 @@ export async function login(email: string, password: string, meta: { ip?: string
   }
   if (user.totpEnabled) {
     const { totpMatches } = await import("./totp");
-    if (!user.totpSecret || !totpMatches(user.totpSecret, meta.totp ?? "")) return { needsTotp: true as const };
+    if (!meta.totp) return { needsTotp: true as const };
+    if (!user.totpSecret || !totpMatches(user.totpSecret, meta.totp)) {
+      const failed = user.failedLogins + 1;
+      const locked = failed >= LOGIN_FAIL_LIMIT;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLogins: failed, lockedUntil: locked ? new Date(Date.now() + LOGIN_WINDOW_MS) : null },
+      });
+      await prisma.loginHistory.create({ data: { userId: user.id, email: normalized, success: false, ip, userAgent: agent, note: "failed" } });
+      await recordLogin(locked ? "LOGIN_LOCKED" : "LOGIN_FAILED", user.id, `Wrong authenticator code for ${normalized}`);
+      if (locked) return { locked: true as const };
+      return { needsTotp: true as const };
+    }
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
+  await recordLogin("LOGIN", user.id, `Signed in (${normalized})`);
   return openSession(user.id);
 }
 

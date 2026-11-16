@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { scopeSql } from "./scope";
+import { liveTicketSql, scopeSql } from "./scope";
 import type { ComplaintFilters, SessionUser } from "@/lib/types";
 import { istMidnight, midnightShift } from "@/lib/time";
 import { labelOf, STATUSES, CALL_TYPES } from "@/lib/labels";
@@ -47,6 +47,8 @@ function reportWhere(user: SessionUser, scope: string, filters: ComplaintFilters
   if (filters.status) parts.push(Prisma.sql`c.status = ${filters.status}`);
   if (filters.companyId) parts.push(Prisma.sql`c."companyId" = ${filters.companyId}`);
   if (filters.engineerId) parts.push(Prisma.sql`c."engineerId" = ${filters.engineerId}`);
+  if (filters.archived === "only") parts.push(Prisma.sql`c."archived" = true`);
+  else if (filters.archived !== "1") parts.push(liveTicketSql("c"));
   if (extra) parts.push(extra);
   return Prisma.join(parts, " AND ");
 }

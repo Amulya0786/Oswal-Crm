@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/api/public",
   "/api/v1",
   "/api/health",
+  "/api/client-error",
   "/api/cron",
   "/api/report",
   "/chat",

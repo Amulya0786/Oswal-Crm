@@ -12,13 +12,14 @@ describe("production bootstrap", () => {
 
   it("asks for an admin only when the database has no users", () => {
     expect(adminBootstrapError(0, "", "long-enough")).toBe("Set ADMIN_EMAIL before the first start");
-    expect(adminBootstrapError(0, "owner@oswalpumps.com", "short")).toBe("Use at least 8 characters");
+    expect(adminBootstrapError(0, "owner@oswalpumps.com", "short")).toBe("Use at least 10 characters");
     expect(adminBootstrapError(0, "owner@oswalpumps.com", "a-real-password")).toBeNull();
     expect(adminBootstrapError(3, "", "")).toBeNull();
   });
 
   it("rejects a short or unchanged password", () => {
-    expect(newPasswordError("tiny", false)).toBe("Use at least 8 characters");
+    expect(newPasswordError("tiny", false)).toBe("Use at least 10 characters");
+    expect(newPasswordError("too-short", false)).toBe("Use at least 10 characters");
     expect(newPasswordError("a-real-password", true)).toBe("Choose a different password");
     expect(newPasswordError("a-real-password", false)).toBeNull();
   });

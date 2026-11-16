@@ -37,7 +37,7 @@ export const PROOF_DEFAULT = {
 };
 
 export function newPasswordError(next, sameAsCurrent) {
-  if (!next || next.length < 8) return "Use at least 8 characters";
+  if (!next || next.length < 10) return "Use at least 10 characters";
   if (sameAsCurrent) return "Choose a different password";
   return null;
 }

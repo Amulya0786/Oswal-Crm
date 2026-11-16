@@ -1,6 +1,8 @@
 import { runAgeingDigest, runEscalation, runSummary } from "@/server/jobs";
 import { warmDashboardCache } from "@/server/home";
 import { sweepAssignmentQueue } from "@/server/assignment";
+import { archiveClosedTickets } from "@/server/archive";
+import { processJobs } from "@/server/queue";
 import { json } from "@/server/http";
 
 export async function POST(req: Request, context: { params: Promise<{ job: string }> }) {
@@ -13,5 +15,7 @@ export async function POST(req: Request, context: { params: Promise<{ job: strin
   if (job === "summary") return json(await runSummary());
   if (job === "ageing") return json(await runAgeingDigest());
   if (job === "dashboard") return json({ ...(await warmDashboardCache()), ...(await sweepAssignmentQueue()) });
+  if (job === "archive") return json(await archiveClosedTickets());
+  if (job === "work") return json(await processJobs(5));
   return json({ error: "Unknown job" }, 404);
 }

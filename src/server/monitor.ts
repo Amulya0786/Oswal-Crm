@@ -1,14 +1,13 @@
-/** Optional error hook. Set SENTRY_DSN to forward errors. Leave it unset and this does nothing. */
+/** Forward an error to Sentry when SENTRY_DSN is set. Leave the variable unset and this does nothing. */
 export async function reportError(error: unknown, where = "app") {
   const dsn = process.env.SENTRY_DSN;
-  const message = error instanceof Error ? error.message : String(error);
   if (!dsn) return;
   try {
-    await fetch(dsn, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, where, at: new Date().toISOString() }),
-    });
+    const Sentry = await import("@sentry/nextjs");
+    if (!Sentry.getClient()) {
+      Sentry.init({ dsn, enabled: true, tracesSampleRate: 0, sendDefaultPii: false });
+    }
+    Sentry.captureException(error, { tags: { where } });
   } catch {
     /* monitoring must not break the request */
   }

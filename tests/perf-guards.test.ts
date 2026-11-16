@@ -44,9 +44,25 @@ describe("pool url", () => {
     expect(applyPoolParamsJs(`${direct}&connection_limit=10`)).toBe(next);
   });
 
-  it("shrinks a pool above 10", () => {
-    const next = applyPoolParams(`${direct}&connection_limit=17`);
+  it("keeps a limit up to 20 and falls back when it is higher", () => {
+    const kept = applyPoolParams(`${direct}&connection_limit=17`);
+    expect(new URL(kept).searchParams.get("connection_limit")).toBe("17");
+    const next = applyPoolParams(`${direct}&connection_limit=40`);
     expect(new URL(next).searchParams.get("connection_limit")).toBe("8");
+    expect(applyPoolParamsJs(`${direct}&connection_limit=40`)).toBe(next);
+  });
+
+  it("lets PRISMA_CONNECTION_LIMIT override the url", () => {
+    const previous = process.env.PRISMA_CONNECTION_LIMIT;
+    process.env.PRISMA_CONNECTION_LIMIT = "16";
+    try {
+      const next = applyPoolParams(`${direct}&connection_limit=8`);
+      expect(new URL(next).searchParams.get("connection_limit")).toBe("16");
+      expect(applyPoolParamsJs(`${direct}&connection_limit=8`)).toBe(next);
+    } finally {
+      if (previous == null) delete process.env.PRISMA_CONNECTION_LIMIT;
+      else process.env.PRISMA_CONNECTION_LIMIT = previous;
+    }
   });
 });
 

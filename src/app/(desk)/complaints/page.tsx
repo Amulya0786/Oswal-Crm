@@ -50,6 +50,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       </div>
       <form className="filters" action="/complaints" id="complaint-filters">
         {filters.reassigned === "1" && <input type="hidden" name="reassigned" value="1" />}
+        <label className="stack">Archive<select name="archived" aria-label="Archived tickets" defaultValue={filters.archived ?? ""}><option value="">Hide archived</option><option value="1">Include archived</option><option value="only">Archived only</option></select></label>
         {typeof sp.advanced === "string" && <input type="hidden" name="advanced" value="1" />}
         <label className="stack">{t("Search")}<input name="q" aria-label={t("Search")} defaultValue={filters.q ?? ""} autoFocus={sp.advanced === "1"} placeholder="Ticket, name, phone, Saral, portal no, MSEDCL request" /></label>
         <label className="stack">{t("Status")}<select name="status" aria-label={t("Status")} defaultValue={filters.status ?? ""}><option value="">{t("Any status")}</option>{STATUSES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { scopeSql } from "./scope";
+import { deskScopeSql } from "./scope";
 import { scorecardRow } from "@/lib/phase2";
 import { textPdf } from "@/lib/pdf";
 import type { SessionUser } from "@/lib/types";
@@ -34,7 +34,7 @@ function shape(label: string, row: { tickets: number; closed: number; within_sla
 }
 
 export async function loadScorecards(user: SessionUser, scope: string) {
-  const where = scopeSql(user, scope, "c");
+  const where = deskScopeSql(user, scope, "c");
   const [technicians, districts, states] = await Promise.all([
     prisma.$queryRaw<Record<string, unknown>[]>`
       SELECT COALESCE(c."assignedName", 'Unassigned') AS label, ${SELECT}

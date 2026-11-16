@@ -4,6 +4,7 @@ import path from "path";
 import { once } from "events";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { enqueueJob } from "./queue";
 import { filterSql, scopeSql } from "./scope";
 import { loadRiskContext } from "./query";
 import type { ComplaintFilters, SessionUser } from "@/lib/types";
@@ -24,9 +25,7 @@ export async function enqueueExport(user: SessionUser, scope: string, filters: C
       status: "QUEUED",
     },
   });
-  setImmediate(() => {
-    void runExport(job.id).catch((error) => console.error(error));
-  });
+  await enqueueJob("export", { exportId: job.id });
   return job;
 }
 

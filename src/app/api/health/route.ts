@@ -1,14 +1,23 @@
+import { healthBody } from "@/lib/health";
+import { configuredPool } from "@/server/db-url";
 import { prisma } from "@/server/db";
 import { startScheduler } from "@/server/jobs";
 
 export async function GET() {
   startScheduler();
+  const started = Date.now();
+  const pool = configuredPool();
+  const dbStarted = Date.now();
   try {
     const rows = await prisma.$queryRaw<{ ok: number }[]>`SELECT 1 AS ok`;
-    return Response.json({ ok: rows[0]?.ok === 1, db: true, service: "oswal-service" });
+    const dbMs = Date.now() - dbStarted;
+    const dbOk = rows[0]?.ok === 1;
+    const body = healthBody({ dbOk, dbMs, totalMs: Date.now() - started, limit: pool.limit });
+    return Response.json(body, { status: dbOk ? 200 : 503 });
   } catch (error) {
     const { reportError } = await import("@/server/monitor");
     await reportError(error, "health");
-    return Response.json({ ok: false, db: false, service: "oswal-service" }, { status: 503 });
+    const body = healthBody({ dbOk: false, dbMs: Date.now() - dbStarted, totalMs: Date.now() - started, limit: pool.limit });
+    return Response.json(body, { status: 503 });
   }
 }

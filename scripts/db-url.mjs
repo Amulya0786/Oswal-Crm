@@ -1,4 +1,5 @@
 const DEFAULT_LIMIT = "8";
+const POOL_MAX = 20;
 
 /** Keep in step with src/server/db-url.ts. Bootstrap runs as plain Node, so it cannot import the TypeScript file. */
 export function applyPoolParams(raw) {
@@ -19,10 +20,18 @@ export function runtimeDatabaseUrl(raw) {
   return applyPoolParams(raw);
 }
 
-function poolLimit(current) {
-  if (current == null || current === "") return DEFAULT_LIMIT;
-  const n = Number(current);
-  if (!Number.isInteger(n) || n < 8 || n > 10) return DEFAULT_LIMIT;
+export function poolLimit(current, envValue = process.env.PRISMA_CONNECTION_LIMIT) {
+  const fromEnv = acceptedLimit(envValue);
+  if (fromEnv) return fromEnv;
+  const fromUrl = acceptedLimit(current);
+  if (fromUrl) return fromUrl;
+  return DEFAULT_LIMIT;
+}
+
+function acceptedLimit(value) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > POOL_MAX) return null;
   return String(n);
 }
 
@@ -30,5 +39,5 @@ function appendPoolParams(raw) {
   const withoutLimit = raw.replace(/([?&])connection_limit=[^&]*/g, "$1").replace(/[?&]$/, "");
   const withoutBouncer = withoutLimit.replace(/([?&])pgbouncer=[^&]*/g, "$1").replace(/[?&]$/, "");
   const join = withoutBouncer.includes("?") ? "&" : "?";
-  return `${withoutBouncer}${join}connection_limit=${DEFAULT_LIMIT}&pgbouncer=true`;
+  return `${withoutBouncer}${join}connection_limit=${poolLimit(null)}&pgbouncer=true`;
 }

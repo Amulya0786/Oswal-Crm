@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { scopeSql } from "./scope";
+import { deskScopeSql } from "./scope";
 import { kolkataTodayStart, midnightShift } from "@/lib/time";
 import { remember } from "./memory-cache";
 import type { SessionUser } from "@/lib/types";
@@ -22,7 +22,7 @@ async function loadCounters(user: SessionUser, scope: string, kind: "state" | "b
   const now = new Date();
   const today = kolkataTodayStart(now);
   const tomorrow = midnightShift(now, 1);
-  const where = scopeSql(user, scope, "c");
+  const where = deskScopeSql(user, scope, "c");
   const label = kind === "state" ? Prisma.sql`COALESCE(NULLIF(c."stateName", ''), 'Unknown')` : Prisma.sql`COALESCE(NULLIF(c."brandName", ''), 'No brand')`;
   const id = kind === "state" ? Prisma.sql`COALESCE(c."stateId", '')` : Prisma.sql`COALESCE(c."brandId", '')`;
   const start7 = midnightShift(now, -7);

@@ -1,0 +1,87 @@
+# Staging spec. Do not create this app until asked. It is a paid second app.
+# Use a database that is not the production cluster. Never copy production secrets.
+name: oswal-service-staging
+region: blr
+
+services:
+  - name: web
+    github:
+      repo: Amulya0786/Oswal-Crm
+      branch: staging
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 20
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 9
+
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: Amulya0786/Oswal-Crm
+      branch: staging
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    run_command: node scripts/migrate.mjs && node scripts/bootstrap.mjs
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 1
+
+# No databases block on purpose. Attach a separate database in the dashboard
+# and put its connection string in DATABASE_URL and DIRECT_URL below.
+
+envs:
+  - key: DATABASE_URL
+    scope: RUN_TIME
+    type: SECRET
+    value: set-a-staging-database-url
+  - key: DIRECT_URL
+    scope: RUN_TIME
+    type: SECRET
+    value: set-the-same-staging-database-url
+  - key: APP_URL
+    scope: RUN_TIME
+    value: https://staging.example.com
+  - key: IMPORT_CUTOFF
+    scope: RUN_TIME
+    value: "2026-04-01"
+  - key: NEXT_PUBLIC_DEMO_HINTS
+    scope: RUN_AND_BUILD_TIME
+    value: "0"
+  - key: ENABLE_JOBS
+    scope: RUN_TIME
+    value: "1"
+  # Leave unset on a 1 GB database. Set 12-16 only after a 2 GB upgrade.
+  # - key: PRISMA_CONNECTION_LIMIT
+  #   scope: RUN_TIME
+  #   value: "8"
+  # - key: SENTRY_DSN
+  #   scope: RUN_TIME
+  #   type: SECRET
+  #   value: set-a-staging-sentry-dsn
+  - key: AUTH_SECRET
+    scope: RUN_TIME
+    type: SECRET
+    value: set-a-new-staging-auth-secret
+  - key: CRON_SECRET
+    scope: RUN_TIME
+    type: SECRET
+    value: set-a-new-staging-cron-secret
+  - key: OSWAL_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: set-a-new-staging-api-key
+  - key: ADMIN_EMAIL
+    scope: RUN_TIME
+    type: SECRET
+    value: set-staging-admin-email
+  - key: ADMIN_INITIAL_PASSWORD
+    scope: RUN_TIME
+    type: SECRET
+    value: set-a-long-staging-password

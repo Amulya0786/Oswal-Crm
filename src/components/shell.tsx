@@ -25,6 +25,7 @@ const GROUPS = [
     { href: "/complaints?status=CLOSED", label: "Closed", icon: ClipboardList },
     { href: "/complaints?status=HAPPY_CALLING", label: "Happy calling done", icon: ClipboardList },
     { href: "/complaints?status=CANCELLED", label: "Cancelled", icon: ClipboardList },
+    { href: "/complaints?archived=only", label: "Archived", icon: ClipboardList },
     { href: "/complaints?status=CLOSED_UNVERIFIED", label: "Closed unverified", icon: ClipboardList },
     { href: "/complaints?status=PENDING_CLOSURE", label: "Pending closure approval", icon: ClipboardList },
     { href: "/assign", label: "To assign", icon: ClipboardList },
@@ -248,6 +249,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
                         && (params.get("status") ?? "") === (url.searchParams.get("status") ?? "")
                         && (params.get("reassigned") ?? "") === (url.searchParams.get("reassigned") ?? "")
                         && (params.get("advanced") ?? "") === (url.searchParams.get("advanced") ?? "")
+                        && (params.get("archived") ?? "") === (url.searchParams.get("archived") ?? "")
                       : url.pathname === "/reports"
                         ? path === "/reports" || (path.startsWith("/reports/") && !path.startsWith("/reports/daily") && !path.startsWith("/reports/ageing"))
                         : path === url.pathname || path.startsWith(`${url.pathname}/`);

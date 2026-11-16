@@ -347,20 +347,26 @@ export async function runAgeingDigest(now = new Date()) {
 }
 
 let schedulerStarted = false;
-let ageingSentOn = "";
 export function startScheduler() {
   if (schedulerStarted || process.env.ENABLE_JOBS === "0" || process.env.VITEST) return;
   schedulerStarted = true;
-  const tick = () => {
-    void runEscalation().catch((error) => console.error("escalation job", error));
+  const tick = async () => {
+    const { enqueueDaily, enqueueSpaced, processJobs } = await import("./queue");
+    await enqueueSpaced("escalation");
+    await enqueueSpaced("dashboard");
     const ymd = kolkataYmd();
-    const key = `${ymd.y}-${ymd.m}-${ymd.d}`;
+    const key = `${ymd.y}-${String(ymd.m).padStart(2, "0")}-${String(ymd.d).padStart(2, "0")}`;
     const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
-    if (hour === 8 && ageingSentOn !== key) {
-      ageingSentOn = key;
-      void runAgeingDigest().catch((error) => console.error("ageing report", error));
+    if (hour === 8) {
+      await enqueueDaily("ageing", key);
+      await enqueueDaily("summary", key);
     }
+    await enqueueDaily("archive", key);
+    await processJobs(1);
   };
-  setInterval(tick, 5 * 60 * 1000);
-  setTimeout(tick, 20 * 1000);
+  const run = () => {
+    void tick().catch((error) => console.error("job runner", error));
+  };
+  setInterval(run, 60 * 1000);
+  setTimeout(run, 20 * 1000);
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookieFlags } from "@/lib/cookies";
 import { getCurrentUser, issueTotpSetup } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { json } from "@/server/http";
@@ -11,6 +12,6 @@ export async function POST() {
   if (row.totpEnabled) return json({ error: "Authenticator is already on." }, 400);
   const setup = await issueTotpSetup(user.id);
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("oswal_totp_setup", setup, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 10 });
+  response.cookies.set("oswal_totp_setup", setup, cookieFlags(true, 60 * 10));
   return response;
 }

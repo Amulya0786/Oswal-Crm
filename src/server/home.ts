@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { scopeSql } from "./scope";
+import { deskScopeSql } from "./scope";
 import { kolkataMonthStart, kolkataNextMonthStart, kolkataTodayStart, midnightShift } from "@/lib/time";
 import type { SessionUser } from "@/lib/types";
 import { remember } from "./memory-cache";
@@ -41,7 +41,7 @@ export async function warmDashboardCache() {
 }
 
 async function computeHome(user: SessionUser, scope: string, stateName?: string | null) {
-  const where = scopeSql(user, scope, "c");
+  const where = deskScopeSql(user, scope, "c");
   const extra = stateName ? Prisma.sql`AND c."stateName" = ${stateName}` : Prisma.empty;
   const now = new Date();
   const today = kolkataTodayStart(now);

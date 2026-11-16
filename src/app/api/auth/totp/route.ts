@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { cookieFlags } from "@/lib/cookies";
 import { prisma } from "@/server/db";
 import { json } from "@/server/http";
-import { openSession, userForTotpSetup } from "@/server/auth";
+import { openSession, recordLogin, userForTotpSetup } from "@/server/auth";
 import { newTotpSecret, totpMatches, totpUri } from "@/server/totp";
 
 const LIMIT = 8;
@@ -34,11 +35,12 @@ export async function POST(req: Request) {
     });
     const session = await openSession(user.id);
     if (!session) return json({ error: "Could not open the desk" }, 500);
+    await recordLogin("LOGIN", user.id, `Signed in after authenticator setup (${user.email})`);
     const response = NextResponse.json({ ok: true });
-    response.cookies.set("oswal_totp_setup", "", { httpOnly: true, path: "/", maxAge: 0 });
-    response.cookies.set("oswal_session", session.token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7 });
-    if (session.user.caps.allCompanies) response.cookies.set("oswal_company", "all", { httpOnly: false, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
-    else if (session.user.companyIds[0]) response.cookies.set("oswal_company", session.user.companyIds[0], { httpOnly: false, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+    response.cookies.set("oswal_totp_setup", "", cookieFlags(true, 0));
+    response.cookies.set("oswal_session", session.token, cookieFlags(true, 60 * 60 * 24 * 7));
+    if (session.user.caps.allCompanies) response.cookies.set("oswal_company", "all", cookieFlags(false, 60 * 60 * 24 * 30));
+    else if (session.user.companyIds[0]) response.cookies.set("oswal_company", session.user.companyIds[0], cookieFlags(false, 60 * 60 * 24 * 30));
     return response;
   }
   const secret = user.totpSecret ?? newTotpSecret();

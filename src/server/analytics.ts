@@ -1,12 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { scopeSql } from "./scope";
+import { deskScopeSql } from "./scope";
 import type { SessionUser } from "@/lib/types";
 import { midnightShift } from "@/lib/time";
 import { labelOf, CALL_TYPES } from "@/lib/labels";
 
 export async function getAnalytics(user: SessionUser, scope: string, now = new Date()) {
-  const where = scopeSql(user, scope, "c");
+  const where = deskScopeSql(user, scope, "c");
   const start = midnightShift(now, -29);
   const [trend, leaders, mttrProduct, mttrState, problems, heat] = await Promise.all([
     fallbackTrend(where, start),

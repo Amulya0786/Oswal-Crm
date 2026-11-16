@@ -133,6 +133,7 @@ model LoginHistory {
 
   @@index([at])
   @@index([userId, at])
+  @@index([ip, at])
 }
 
 model State {
@@ -568,6 +569,8 @@ model Complaint {
   portalStatus      String?
   gpsSiteUnknown    Boolean   @default(false)
   reassignedOnce    Boolean   @default(false)
+  archived          Boolean   @default(false)
+  archivedAt        DateTime?
   subType           String?
   msedclRequestNo   String?
   msedclStatus      String?
@@ -640,6 +643,10 @@ model Complaint {
   @@index([portal])
   @@index([portalNo])
   @@index([reassignedOnce, status])
+  @@index([archived, status])
+  @@index([status, stateId, createdAt])
+  @@index([createdAt])
+  @@index([archived, portalNo])
   @@index([pincode])
   @@index([closedAt])
   @@index([happyAt])
@@ -857,6 +864,22 @@ model WebhookDelivery {
   endpoint   WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
   @@index([at])
+}
+
+model BackgroundJob {
+  id         String    @id @default(cuid())
+  kind       String
+  payload    String    @default("{}")
+  status     String    @default("QUEUED")
+  runAt      DateTime  @default(now())
+  attempts   Int       @default(0)
+  lockedAt   DateTime?
+  finishedAt DateTime?
+  error      String?
+  createdAt  DateTime  @default(now())
+
+  @@index([status, runAt])
+  @@index([kind, status])
 }
 
 model ExportJob {

@@ -57,6 +57,15 @@ export function scopeSql(user: SessionUser, scope: string, alias?: string) {
   return Prisma.join(parts, " AND ");
 }
 
+/** Default lists and dashboards hide tickets closed more than a year ago. */
+export function liveTicketSql(alias?: string) {
+  return Prisma.sql`${col(alias, "archived")} = false`;
+}
+
+export function deskScopeSql(user: SessionUser, scope: string, alias?: string) {
+  return Prisma.sql`${scopeSql(user, scope, alias)} AND ${liveTicketSql(alias)}`;
+}
+
 export function canSee(
   user: SessionUser,
   scope: string,
@@ -167,6 +176,8 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
   if (filters.hold === "1") parts.push(Prisma.sql`${status} = 'PENDING'`);
   if (filters.hold === "0") parts.push(Prisma.sql`${status} <> 'PENDING'`);
   if (filters.reassigned === "1") parts.push(Prisma.sql`${col(alias, "reassignedOnce")} = true`);
+  if (filters.archived === "only") parts.push(Prisma.sql`${col(alias, "archived")} = true`);
+  else if (filters.archived !== "1") parts.push(Prisma.sql`${col(alias, "archived")} = false`);
   if (filters.scheme === "any") {
     parts.push(Prisma.sql`(${col(alias, "callType")} = 'SCHEME' OR ${col(alias, "schemeName")} IS NOT NULL)`);
   } else if (filters.scheme) {
@@ -238,6 +249,7 @@ export function filtersFromRecord(input: Record<string, string | string[] | unde
     dateOn: one("dateOn"),
     hold: one("hold"),
     reassigned: one("reassigned"),
+    archived: one("archived"),
     brandId: one("brandId"),
     priority: one("priority"),
     source: one("source"),

@@ -62,6 +62,16 @@ envs:
   - key: ENABLE_JOBS
     scope: RUN_TIME
     value: "1"
+  # Optional. Leave unset until Sentry should receive errors. Unset means no reporting.
+  # - key: SENTRY_DSN
+  #   scope: RUN_TIME
+  #   type: SECRET
+  #   value: set-when-sentry-is-ready
+  # Optional. Leave unset on the 1 GB database (pool stays at 8).
+  # Set 12-16 only after the database is upgraded to 2 GB. Do not resize it from here.
+  # - key: PRISMA_CONNECTION_LIMIT
+  #   scope: RUN_TIME
+  #   value: "8"
   - key: S3_ENDPOINT
     scope: RUN_TIME
     value: https://sgp1.digitaloceanspaces.com

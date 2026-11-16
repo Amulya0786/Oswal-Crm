@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   eslint: { ignoreDuringBuilds: true },
-  serverExternalPackages: ["bcryptjs", "exceljs", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
+  serverExternalPackages: ["bcryptjs", "exceljs", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner", "@sentry/nextjs"],
   async headers() {
     return [{
       source: "/_next/static/:path*",

@@ -1,6 +1,16 @@
 "use client";
 
-export default function ErrorPage({ reset }: { error: Error; reset: () => void }) {
+import { useEffect } from "react";
+
+export default function ErrorPage({ error, reset }: { error: Error; reset: () => void }) {
+  useEffect(() => {
+    const message = error?.message?.slice(0, 300) || "Browser error";
+    void fetch("/api/client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+  }, [error]);
   return (
     <main className="main" style={{ maxWidth: 640 }}>
       <img src="/brand/pumps-logo.png" alt="Oswal" height={72} />
