@@ -1,0 +1,1 @@
+ALTER TABLE "Category" ADD COLUMN "companyCode" TEXT NOT NULL DEFAULT 'PUMPS';

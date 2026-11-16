@@ -1,0 +1,2 @@
+ALTER TABLE "ExpenseClaim" ADD COLUMN IF NOT EXISTS "billPath" TEXT;
+ALTER TABLE "ServiceContract" ADD COLUMN IF NOT EXISTS "visitsIncluded" INTEGER;

@@ -1,0 +1,11 @@
+.env
+.env.*
+.git
+.next
+node_modules
+data/*
+!data/masters
+!data/masters/**
+mobile
+coverage
+*.md

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oswal Service</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #02502f; color: #f4f7f5; font-family: sans-serif; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <img src="icon.png" alt="Oswal" width="96" height="96" />
+      <h1>Oswal Service</h1>
+      <p>Opening the technician desk…</p>
+    </div>
+    <script>
+      const target = (window.Capacitor && window.Capacitor.serverUrl) || "/field";
+      if (location.protocol === "capacitor:" || location.protocol === "https:" || location.protocol === "http:") {
+        location.replace(target.startsWith("http") ? target : "/field");
+      }
+    </script>
+  </body>
+</html>

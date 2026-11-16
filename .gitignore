@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+dist
+.env
+*.log
+data/uploads
+data/exports
+data/summaries
+data/imports
+prisma/*.db
+prisma/*.db-journal
+coverage
+perf-results.json
+.DS_Store
+tsconfig.tsbuildinfo
