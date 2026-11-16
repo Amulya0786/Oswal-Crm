@@ -148,7 +148,15 @@ export function ComplaintTable({
                   <details>
                     <summary>Update</summary>
                     <div className="stack">
-                      {can.assign && <select defaultValue="" onChange={(event) => event.target.value && act(row.id, { action: "assign", engineerId: event.target.value })}><option value="">Assign…</option>{engineers.map((engineer) => <option key={engineer.id} value={engineer.id}>{engineer.name}</option>)}</select>}
+                      {can.assign && ["OPEN", "ASSIGNED", "REASSIGNED", "PENDING"].includes(row.status) && (
+                        <span className="filters">
+                          <select id={`assign-${row.id}`} defaultValue="" aria-label={`Engineer for ${row.ticketNo}`}><option value="">Assign…</option>{engineers.map((engineer) => <option key={engineer.id} value={engineer.id}>{engineer.name}</option>)}</select>
+                          <button type="button" className="btn" onClick={() => {
+                            const chosen = (document.getElementById(`assign-${row.id}`) as HTMLSelectElement | null)?.value;
+                            if (chosen) void act(row.id, { action: "assign", engineerId: chosen });
+                          }}>Assign</button>
+                        </span>
+                      )}
                       {can.hold && <button className="btn line" onClick={() => act(row.id, { action: "hold", holdReason: "Customer not available" })}>Hold</button>}
                       {can.close && <button className="btn line" onClick={() => act(row.id, { action: "close", problemId: problems[0]?.id, solutionId: solutions[0]?.id })}>Close with first problem</button>}
                       {can.happy && row.status === "CLOSED" && <button className="btn line" onClick={() => act(row.id, { action: "happy", rating: 5 })}>Happy call 5</button>}

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { scopeSql } from "./scope";
-import { kolkataTodayStart, midnightShift } from "@/lib/time";
+import { kolkataMonthStart, kolkataNextMonthStart, kolkataTodayStart, midnightShift } from "@/lib/time";
 import type { SessionUser } from "@/lib/types";
 import { remember } from "./memory-cache";
 
@@ -46,6 +46,8 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
   const now = new Date();
   const today = kolkataTodayStart(now);
   const tomorrow = midnightShift(now, 1);
+  const monthStart = kolkataMonthStart(now);
+  const nextMonth = kolkataNextMonthStart(now);
   const monthAgo = new Date(now.getTime() - 30 * 86400000);
   const place = stateName ? Prisma.sql`c."districtName"` : Prisma.sql`c."stateName"`;
   const [
@@ -64,7 +66,13 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     latest,
     unassigned,
   ] = await Promise.all([
-    prisma.$queryRaw<{ booked: number; closed: number; pending: number; overdue: number; repeats: number; happy: number; rating: number; first_contact: number }[]>`
+    prisma.$queryRaw<{
+      booked: number; closed: number; pending: number; open: number; assigned: number; held: number;
+      overdue: number; repeats: number; happy: number; rating: number; first_contact: number;
+      logged_month: number; closed_month: number; happy_month: number; cancel_month: number;
+      happy_today: number; cancel_today: number;
+      breakdown: number; installation: number; insurance: number; mobile: number;
+    }[]>`
       SELECT
         COUNT(*) FILTER (WHERE c."bookDate" >= ${today} AND c."bookDate" < ${tomorrow})::int AS booked,
         COUNT(*) FILTER (WHERE c.status IN ('CLOSED','CLOSED_UNVERIFIED','HAPPY_CALLING') AND (
@@ -72,11 +80,24 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
           OR (c.status = 'HAPPY_CALLING' AND c."happyAt" >= ${today} AND c."happyAt" < ${tomorrow})
         ))::int AS closed,
         COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS pending,
+        COUNT(*) FILTER (WHERE c.status = 'OPEN')::int AS open,
+        COUNT(*) FILTER (WHERE c.status = 'ASSIGNED')::int AS assigned,
+        COUNT(*) FILTER (WHERE c.status = 'PENDING')::int AS held,
         COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."slaDueAt" IS NOT NULL AND c."slaDueAt" <= ${now})::int AS overdue,
         COUNT(*) FILTER (WHERE c."repeatFlag" = true AND c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING'))::int AS repeats,
         COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callbackDueAt" IS NOT NULL AND c."callbackDueAt" <= ${now} AND c."assignedAt" IS NULL)::int AS first_contact,
         COUNT(*) FILTER (WHERE c."feedbackPending" = true)::int AS happy,
-        COALESCE(ROUND(AVG(c."happyRating") FILTER (WHERE c."happyRating" IS NOT NULL))::int, 0) AS rating
+        COALESCE(ROUND(AVG(c."happyRating") FILTER (WHERE c."happyRating" IS NOT NULL))::int, 0) AS rating,
+        COUNT(*) FILTER (WHERE c."bookDate" >= ${monthStart} AND c."bookDate" < ${nextMonth})::int AS logged_month,
+        COUNT(*) FILTER (WHERE c.status IN ('CLOSED','CLOSED_UNVERIFIED') AND c."closedAt" >= ${monthStart} AND c."closedAt" < ${nextMonth})::int AS closed_month,
+        COUNT(*) FILTER (WHERE c.status = 'HAPPY_CALLING' AND c."happyAt" >= ${monthStart} AND c."happyAt" < ${nextMonth})::int AS happy_month,
+        COUNT(*) FILTER (WHERE c.status = 'CANCELLED' AND c."cancelledAt" >= ${monthStart} AND c."cancelledAt" < ${nextMonth})::int AS cancel_month,
+        COUNT(*) FILTER (WHERE c.status = 'HAPPY_CALLING' AND c."happyAt" >= ${today} AND c."happyAt" < ${tomorrow})::int AS happy_today,
+        COUNT(*) FILTER (WHERE c.status = 'CANCELLED' AND c."cancelledAt" >= ${today} AND c."cancelledAt" < ${tomorrow})::int AS cancel_today,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callType" = 'BREAKDOWN')::int AS breakdown,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callType" = 'INSTALLATION')::int AS installation,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callType" = 'INSURANCE')::int AS insurance,
+        COUNT(*) FILTER (WHERE c.status IN ('OPEN','ASSIGNED','REASSIGNED','PENDING') AND c."callType" = 'MOBILE_APP')::int AS mobile
       FROM "Complaint" c
       WHERE ${where} ${extra}
     `,
@@ -183,7 +204,7 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     filled.push({ day: key, booked: found?.booked ?? 0 });
   }
   return {
-    kpi: kpi ?? { booked: 0, closed: 0, pending: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0 },
+    kpi: kpi ?? { booked: 0, closed: 0, pending: 0, open: 0, assigned: 0, held: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0, logged_month: 0, closed_month: 0, happy_month: 0, cancel_month: 0, happy_today: 0, cancel_today: 0, breakdown: 0, installation: 0, insurance: 0, mobile: 0 },
     byCall,
     byStatus,
     monthBooked: Number(monthBooked[0]?.n ?? 0),

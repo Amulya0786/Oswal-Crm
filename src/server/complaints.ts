@@ -16,6 +16,7 @@ import { loadRiskContext } from "./query";
 import { displayPhone } from "@/lib/mask";
 import { formatDay } from "@/lib/time";
 import { inferPortal, isPortalTicket, normalizePortal } from "@/lib/portal";
+import { becameReassigned } from "@/lib/reassign";
 import type { SessionUser } from "@/lib/types";
 import { parseTicketNo } from "@/lib/ticket";
 import { issueTrackToken } from "@/lib/report-key";
@@ -456,6 +457,7 @@ export async function getComplaint(user: SessionUser, scope: string, idOrTicket:
       events: { orderBy: { at: "desc" }, take: 200 },
       notes: { orderBy: { createdAt: "desc" }, take: 100, include: { user: { select: { name: true } } } },
       attachments: { orderBy: { createdAt: "desc" } },
+      media: { orderBy: { createdAt: "asc" } },
       checks: { include: { item: true } },
       company: true,
       escalatedTo: { select: { name: true, role: true } },
@@ -593,7 +595,8 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
       });
       throw new HttpError(400, "That technician is in another state");
     }
-    const reassigned = Boolean(current.engineerId);
+    const reassigned = becameReassigned(current.engineerId, engineer.id);
+    if (reassigned) data.reassignedOnce = true;
     data.engineerId = engineer.id;
     data.assignedName = engineer.name;
     data.assignedAt = now;

@@ -34,7 +34,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const ageing = data.ageing ?? [];
   const companies = data.companies ?? [];
   const technicians = data.technicians ?? [];
-  const kpi = data.kpi ?? { booked: 0, closed: 0, pending: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0 };
+  const kpi = data.kpi ?? { booked: 0, closed: 0, pending: 0, open: 0, assigned: 0, held: 0, overdue: 0, repeats: 0, happy: 0, rating: 0, first_contact: 0, logged_month: 0, closed_month: 0, happy_month: 0, cancel_month: 0, happy_today: 0, cancel_today: 0, breakdown: 0, installation: 0, insurance: 0, mobile: 0 };
   const max = Math.max(1, ...places.map((row) => row.open));
   const trendMax = Math.max(1, ...trend.map((row) => row.booked));
   return (
@@ -63,13 +63,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </form>
       )}
       <div className="tile-grid">
-        <Link className="tile" href="/complaints?booked=today"><span>Booked today</span><b>{formatNumber(kpi.booked)}</b></Link>
-        <Link className="tile" href="/complaints?closed=today"><span>Closed today</span><b>{formatNumber(kpi.closed)}</b></Link>
-        <Link className="tile" href="/complaints?statusGroup=active"><span>Pending</span><b>{formatNumber(kpi.pending)}</b></Link>
-        {view !== "desk" && <Link className="tile" href="/complaints?breach=1"><span>Overdue</span><b>{formatNumber(kpi.overdue)}</b></Link>}
-        {view !== "desk" && <Link className="tile" href="/complaints?statusGroup=active"><span>First contact overdue</span><b>{formatNumber(kpi.first_contact ?? 0)}</b></Link>}
-        {view !== "desk" && <Link className="tile" href="/assign"><span>To assign</span><b>{formatNumber(data.unassigned ?? 0)}</b></Link>}
-        {view !== "desk" && <Link className="tile" href="/complaints?booked=month"><span>This month</span><b>{formatNumber(data.monthBooked ?? 0)}</b></Link>}
+        <Link className="tile" href="/complaints?statusGroup=active"><span>Total pending</span><b>{formatNumber(kpi.pending)}</b></Link>
+        <Link className="tile" href="/complaints?status=OPEN"><span>Total open</span><b>{formatNumber(kpi.open ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?status=ASSIGNED"><span>Assigned</span><b>{formatNumber(kpi.assigned ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?status=PENDING"><span>Pending</span><b>{formatNumber(kpi.held ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?booked=month"><span>Total login this month</span><b>{formatNumber(kpi.logged_month ?? data.monthBooked ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?closed=month"><span>Closed this month</span><b>{formatNumber(kpi.closed_month ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?happy=month"><span>Happy calling done</span><b>{formatNumber(kpi.happy_month ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?cancelled=month"><span>Cancelled</span><b>{formatNumber(kpi.cancel_month ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?statusGroup=active&callType=BREAKDOWN"><span>Pending breakdown</span><b>{formatNumber(kpi.breakdown ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?statusGroup=active&callType=INSTALLATION"><span>Pending installation</span><b>{formatNumber(kpi.installation ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?statusGroup=active&callType=INSURANCE"><span>Pending insurance</span><b>{formatNumber(kpi.insurance ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?statusGroup=active&callType=MOBILE_APP"><span>Pending mobile app</span><b>{formatNumber(kpi.mobile ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?booked=today"><span>Today login</span><b>{formatNumber(kpi.booked)}</b></Link>
+        <Link className="tile" href="/complaints?closed=today"><span>Today closed</span><b>{formatNumber(kpi.closed)}</b></Link>
+        <Link className="tile" href="/complaints?happy=today"><span>Today happy calling</span><b>{formatNumber(kpi.happy_today ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?cancelled=today"><span>Today cancelled</span><b>{formatNumber(kpi.cancel_today ?? 0)}</b></Link>
+        <Link className="tile" href="/complaints?breach=1"><span>Overdue</span><b>{formatNumber(kpi.overdue)}</b></Link>
+        <Link className="tile" href="/complaints?statusGroup=active"><span>First contact overdue</span><b>{formatNumber(kpi.first_contact ?? 0)}</b></Link>
       </div>
       {view === "desk" && (
         <div className="grid-2" style={{ marginTop: 16 }}>

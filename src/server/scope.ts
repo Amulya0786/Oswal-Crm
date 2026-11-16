@@ -141,11 +141,12 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
       ${serialSql}
       OR ${col(alias, "saralId")} ILIKE ${pattern} ESCAPE '\\'
       OR ${col(alias, "portalNo")} ILIKE ${pattern} ESCAPE '\\'
+      OR ${col(alias, "msedclRequestNo")} ILIKE ${pattern} ESCAPE '\\'
       OR ${col(alias, "assignedName")} ILIKE ${pattern} ESCAPE '\\'
       OR ${col(alias, "productDetails")} ILIKE ${pattern} ESCAPE '\\'
     )`);
   }
-  const knownStatus = new Set<string>([...ACTIVE, "CLOSED", "CLOSED_UNVERIFIED", "HAPPY_CALLING", "CANCELLED"]);
+  const knownStatus = new Set<string>([...ACTIVE, "CLOSED", "CLOSED_UNVERIFIED", "HAPPY_CALLING", "CANCELLED", "PENDING_CLOSURE"]);
   if (filters.status && knownStatus.has(filters.status)) {
     parts.push(Prisma.sql`${status} = ${filters.status}`);
   } else if (filters.statusGroup === "active") {
@@ -156,11 +157,16 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
   if (filters.districtId) parts.push(Prisma.sql`${col(alias, "districtId")} = ${filters.districtId}`);
   if (filters.engineerId) parts.push(Prisma.sql`${col(alias, "engineerId")} = ${filters.engineerId}`);
   if (filters.productId) parts.push(Prisma.sql`${col(alias, "productId")} = ${filters.productId}`);
+  if (filters.categoryId) parts.push(Prisma.sql`${col(alias, "categoryId")} = ${filters.categoryId}`);
+  if (filters.natureId) parts.push(Prisma.sql`${col(alias, "natureId")} = ${filters.natureId}`);
   if (filters.brandId) parts.push(Prisma.sql`${col(alias, "brandId")} = ${filters.brandId}`);
   if (filters.priority) parts.push(Prisma.sql`${col(alias, "priority")} = ${filters.priority}`);
   if (filters.source) parts.push(Prisma.sql`${col(alias, "source")} = ${filters.source}`);
   if (filters.companyId) parts.push(Prisma.sql`${col(alias, "companyId")} = ${filters.companyId}`);
   if (filters.portal) parts.push(Prisma.sql`${col(alias, "portal")} = ${filters.portal}`);
+  if (filters.hold === "1") parts.push(Prisma.sql`${status} = 'PENDING'`);
+  if (filters.hold === "0") parts.push(Prisma.sql`${status} <> 'PENDING'`);
+  if (filters.reassigned === "1") parts.push(Prisma.sql`${col(alias, "reassignedOnce")} = true`);
   if (filters.scheme === "any") {
     parts.push(Prisma.sql`(${col(alias, "callType")} = 'SCHEME' OR ${col(alias, "schemeName")} IS NOT NULL)`);
   } else if (filters.scheme) {
@@ -168,8 +174,9 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
   }
   const from = dayStart(filters.from);
   const to = dayStart(filters.to);
-  if (from) parts.push(Prisma.sql`${book} >= ${from}`);
-  if (to) parts.push(Prisma.sql`${book} < ${midnightShift(to, 1)}`);
+  const dateColumn = filters.dateOn === "schedule" ? col(alias, "scheduleDate") : book;
+  if (from) parts.push(Prisma.sql`${dateColumn} >= ${from}`);
+  if (to) parts.push(Prisma.sql`${dateColumn} < ${midnightShift(to, 1)}`);
   if (filters.booked === "today") parts.push(Prisma.sql`${book} >= ${kolkataTodayStart(now)} AND ${book} < ${midnightShift(now, 1)}`);
   if (filters.booked === "month") parts.push(Prisma.sql`${book} >= ${kolkataMonthStart(now)} AND ${book} < ${kolkataNextMonthStart(now)}`);
   if (filters.closed === "today" || filters.closed === "month") {
@@ -226,6 +233,11 @@ export function filtersFromRecord(input: Record<string, string | string[] | unde
     districtId: one("districtId"),
     engineerId: one("engineerId"),
     productId: one("productId"),
+    categoryId: one("categoryId"),
+    natureId: one("natureId"),
+    dateOn: one("dateOn"),
+    hold: one("hold"),
+    reassigned: one("reassigned"),
     brandId: one("brandId"),
     priority: one("priority"),
     source: one("source"),

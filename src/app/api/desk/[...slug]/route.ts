@@ -1,4 +1,6 @@
 import { loadObject, saveObject, signedObjectUrl } from "@/server/storage";
+import { isImageSlot } from "@/lib/image-slots";
+import { storeZip } from "@/lib/store-zip";
 import { getScope, importTokenOk, rejectTemporaryPassword, userForImport } from "@/server/auth";
 import { fail, json, readJson } from "@/server/http";
 import { prisma, getVersion } from "@/server/db";
@@ -409,17 +411,19 @@ async function route(method: string, slug: string[], req: Request) {
   if (head === "exports" && method === "POST") {
     if (!user.caps.export) return json({ error: "You cannot export" }, 403);
     const body = await readJson(req);
-    const job = await enqueueExport(user, scope, filtersFromRecord(body.filters ?? {}));
+    const job = await enqueueExport(user, scope, filtersFromRecord(body.filters ?? {}), body.format === "xlsx" ? "xlsx" : "csv");
     return json({ job });
   }
   if (head === "exports" && id && extra === "file" && method === "GET") {
     const job = await prisma.exportJob.findUnique({ where: { id } });
     if (!job || !job.filePath || job.status !== "DONE") return json({ error: "Not ready" }, 404);
     if (job.userId !== user.id && !user.caps.security) return json({ error: "Not your export" }, 403);
-    const signed = await signedObjectUrl(job.filePath, { filename: job.fileName ?? "export.csv", contentType: "text/csv" });
+    const excel = (job.fileName ?? "").endsWith(".xlsx");
+    const contentType = excel ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv";
+    const signed = await signedObjectUrl(job.filePath, { filename: job.fileName ?? "export.csv", contentType });
     if (signed) return Response.redirect(signed, 302);
     const bytes = await loadObject(job.filePath);
-    return new Response(bytes, { headers: { "Content-Type": "text/csv", "Content-Disposition": `attachment; filename="${job.fileName ?? "export.csv"}"` } });
+    return new Response(bytes, { headers: { "Content-Type": contentType, "Content-Disposition": `attachment; filename="${job.fileName ?? "export.csv"}"` } });
   }
 
   if (head === "attachments" && method === "POST") {
@@ -454,6 +458,58 @@ async function route(method: string, slug: string[], req: Request) {
         "X-Content-Type-Options": "nosniff",
       },
     });
+  }
+
+  if (head === "media" && method === "POST") {
+    if (!user.caps.note && !user.caps.close && !user.caps.book) return json({ error: "You cannot add photos" }, 403);
+    const form = await req.formData();
+    const file = form.get("file");
+    const slot = String(form.get("slot") ?? "");
+    const complaintId = String(form.get("complaintId") ?? "");
+    if (!isImageSlot(slot)) return json({ error: "Choose a photo slot" }, 400);
+    if (!(file instanceof File)) return json({ error: "Choose a file" }, 400);
+    if (file.size > 5_000_000) return json({ error: "Files must be under 5 MB" }, 400);
+    const complaint = await getComplaint(user, scope, complaintId);
+    if (!complaint) return json({ error: "Complaint not found" }, 404);
+    const taken = await prisma.fieldMedia.findFirst({ where: { complaintId: complaint.id, kind: slot } });
+    if (taken) return json({ error: "That slot already has a photo" }, 409);
+    const stored = `uploads/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "")}`;
+    await saveObject(stored, Buffer.from(await file.arrayBuffer()), file.type || "image/jpeg");
+    const media = await prisma.fieldMedia.create({ data: { complaintId: complaint.id, kind: slot, path: stored, note: file.name } });
+    await prisma.auditLog.create({
+      data: { userId: user.id, companyId: complaint.companyId, entity: "Complaint", entityId: complaint.id, action: "MEDIA", summary: `${complaint.ticketNo}: uploaded ${slot}` },
+    });
+    return json({ media });
+  }
+  if (head === "media" && id && method === "GET") {
+    const media = await prisma.fieldMedia.findUnique({ where: { id }, include: { complaint: true } });
+    if (!media) return json({ error: "Not found" }, 404);
+    const { canSee } = await import("@/server/scope");
+    if (!canSee(user, scope, media.complaint)) return json({ error: "Not found" }, 404);
+    const bytes = await loadObject(media.path);
+    const download = url.searchParams.get("download") === "1";
+    const name = (media.note || `${media.kind}.jpg`).replace(/"/g, "");
+    return new Response(bytes, {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${name}"`,
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  if (head === "media-pack" && id && method === "GET") {
+    const complaint = await getComplaint(user, scope, id);
+    if (!complaint) return json({ error: "Complaint not found" }, 404);
+    const media = await prisma.fieldMedia.findMany({ where: { complaintId: complaint.id } });
+    const files = [];
+    for (const item of media) {
+      try {
+        files.push({ name: `${item.kind}-${item.note || item.id}`, data: await loadObject(item.path) });
+      } catch { /* skip a missing file */ }
+    }
+    if (!files.length) return json({ error: "No photos yet" }, 404);
+    const zip = storeZip(files);
+    return new Response(zip, { headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${complaint.ticketNo}-photos.zip"` } });
   }
 
   if (head === "settings" && method === "GET") {

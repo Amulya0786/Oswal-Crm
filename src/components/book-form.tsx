@@ -35,6 +35,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
   const [engineerId, setEngineerId] = useState("");
   const [assignMode] = useState<"none">("none");
   const [step, setStep] = useState(1);
+  const [split, setSplit] = useState(false);
   const [areaQuery, setAreaQuery] = useState("");
   const [areaHits, setAreaHits] = useState<{ id: string; label: string }[]>([]);
   const [error, setError] = useState("");
@@ -212,7 +213,11 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
         </section>
       )}
       <div className="stack">
-      <nav className="step-tabs" aria-label="Booking steps">
+      <div className="filters">
+        <button type="button" className={split ? "btn line" : "btn"} onClick={() => setSplit(false)}>Steps</button>
+        <button type="button" className={split ? "btn" : "btn line"} onClick={() => setSplit(true)}>One screen</button>
+      </div>
+      <nav className="step-tabs" aria-label="Booking steps" hidden={split}>
         {steps.map((label, index) => <span key={label} className={step === index + 1 ? "on" : ""}>{index + 1} {label}</span>)}
       </nav>
       <div className="chips">
@@ -220,7 +225,8 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <button type="button" key={company.id} className={`chip ${companyId === company.id ? "on" : ""}`} onClick={() => setCompanyId(company.id)}>{company.shortName}</button>
         ))}
       </div>
-      <section className="panel stack form-section" hidden={step !== 1}>
+      <div className={split ? "book-split" : ""}>
+      <section className="panel stack form-section" data-side="left" hidden={!split && step !== 1}>
         <p className="section-label">Customer</p>
         <div className="book-grid">
           <label className="field span-4"><span className="field-label">Mobile <span className="req">*</span></span><input name="phone" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))} required /></label>
@@ -276,7 +282,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <button type="button" className="btn" disabled={!/^[6-9]\d{9}$/.test(phone) || customerName.trim().length < 2} onClick={() => setStep(2)}>Next</button>
         </div>
       </section>
-      <section className="panel stack form-section" hidden={step !== 2}>
+      <section className="panel stack form-section" data-side="left" hidden={!split && step !== 2}>
         <p className="section-label">Address</p>
         <div className="book-grid">
           <label className="field span-12"><span className="field-label">Address</span><input name="address" defaultValue={customer?.address ?? ""} key={`${customer?.id ?? "new"}-address`} /></label>
@@ -317,7 +323,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <button type="button" className="btn" disabled={!districtId || !/^[1-9]\d{5}$/.test(pincode)} onClick={() => setStep(3)}>Next</button>
         </div>
       </section>
-      <section className="panel stack form-section" hidden={step !== 3}>
+      <section className="panel stack form-section" data-side="right" hidden={!split && step !== 3}>
         <p className="section-label">Product</p>
         <div className="book-grid">
           <label className="field span-4"><span className="field-label">Category</span><select value={categoryId} onChange={(event) => chooseCategory(event.target.value)}>
@@ -334,7 +340,7 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <button type="button" className="btn" onClick={() => setStep(4)}>Next</button>
         </div>
       </section>
-      <section className="panel stack form-section" hidden={step !== 4}>
+      <section className="panel stack form-section" data-side="right" hidden={!split && step !== 4}>
         <p className="section-label">Complaint</p>
         <div className="chips">
           {CALL_TYPES.map((type) => <button type="button" key={type.id} className={`chip ${callType === type.id ? "on" : ""}`} onClick={() => setCallType(type.id)}>{type.label}</button>)}
@@ -346,16 +352,18 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <label className="field span-4"><span className="field-label">Schedule date</span><input name="scheduleDate" placeholder="dd/mm/yyyy" inputMode="numeric" /></label>
           <label className="field span-12"><span className="field-label">Remarks</span><input name="natureText" /></label>
         </div>
+        <div className="filters">
+          <label className="stack">Portal<select name="portal" defaultValue=""><option value="">Not set</option>{PORTALS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <label className="stack">Portal complaint no<input name="portalNo" /></label>
+          <label className="stack">Saral / beneficiary id<input name="saralId" /></label>
+          <label className="stack">MSEDCL request no<input name="msedclRequestNo" /></label>
+        </div>
         <details>
-          <summary>Scheme, Saral and more</summary>
+          <summary>Scheme and more</summary>
           <div className="filters">
-            <label className="stack">Saral / beneficiary id<input name="saralId" /></label>
-            <label className="stack">Portal<select name="portal" defaultValue=""><option value="">Not set</option>{PORTALS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-            <label className="stack">Portal complaint no<input name="portalNo" /></label>
             <label className="stack">Portal status<input name="portalStatus" /></label>
             <label className="stack">Sub-type<input name="subType" /></label>
             <label className="stack">Scheme<input name="schemeName" /></label>
-            <label className="stack">MSEDCL request no<input name="msedclRequestNo" /></label>
             <label className="stack">MSEDCL status<input name="msedclStatus" /></label>
             <label className="stack">Request subtype<input name="requestSubtype" /></label>
             <label className="stack">MSEDCL consumer no<input name="msedclConsumerNo" /></label>
@@ -367,17 +375,18 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <button type="button" className="btn" onClick={() => setStep(5)}>Next</button>
         </div>
       </section>
-      <section className="panel form-section" hidden={step !== 5}>
+      <section className="panel form-section" hidden={!split && step !== 5}>
         <p className="section-label">Review</p>
         <p>{customerName || "Customer"} · {phone}</p>
         <p>{districtName || "Location"}{pincode ? ` · ${pincode}` : ""}</p>
         <p>{productName || "Product"} · {CALL_TYPES.find((type) => type.id === callType)?.label}</p>
         <p>Assignment happens after this complaint is saved.</p>
         <div className="step-bar">
-          <button type="button" className="btn line" onClick={() => setStep(4)}>Back</button>
+          {!split && <button type="button" className="btn line" onClick={() => setStep(4)}>Back</button>}
           <button className="btn" disabled={pending}>{pending ? "Booking…" : "Save complaint"}</button>
         </div>
       </section>
+      </div>
       </div>
       <aside className="submit-bar panel">
         <p className="kicker">Summary</p>

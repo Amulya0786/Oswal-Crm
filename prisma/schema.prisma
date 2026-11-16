@@ -567,6 +567,7 @@ model Complaint {
   portalNo          String?
   portalStatus      String?
   gpsSiteUnknown    Boolean   @default(false)
+  reassignedOnce    Boolean   @default(false)
   subType           String?
   msedclRequestNo   String?
   msedclStatus      String?
@@ -638,6 +639,7 @@ model Complaint {
   @@index([saralId])
   @@index([portal])
   @@index([portalNo])
+  @@index([reassignedOnce, status])
   @@index([pincode])
   @@index([closedAt])
   @@index([happyAt])

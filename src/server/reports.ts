@@ -8,7 +8,9 @@ import { labelOf, STATUSES, CALL_TYPES } from "@/lib/labels";
 export const REPORTS = [
   { slug: "employee-work", title: "Employee work summary", kind: "aggregate" as const, blurb: "What each technician is carrying and closing." },
   { slug: "complaint-summary", title: "Complaint summary", kind: "aggregate" as const, blurb: "Status by call type." },
-  { slug: "msedcl", title: "MSEDCL complaint details", kind: "rows" as const, blurb: "Scheme, Saral and consumer numbers." },
+  { slug: "msedcl", title: "MSEDCL complaint details", kind: "rows" as const, blurb: "Request number, portal status, Saral and consumer numbers." },
+  { slug: "hareda", title: "HAREDA complaint details", kind: "rows" as const, blurb: "Haryana portal tickets, with portal number and status." },
+  { slug: "meda", title: "MEDA complaint details", kind: "rows" as const, blurb: "MEDA portal tickets, with portal number and status." },
   { slug: "technician", title: "Technician-wise call details", kind: "rows" as const, blurb: "Every complaint behind a technician." },
   { slug: "category", title: "Category-wise call details", kind: "aggregate" as const, blurb: "Volume by product category." },
   { slug: "nature", title: "Nature-wise call details", kind: "aggregate" as const, blurb: "Why customers called." },
@@ -257,7 +259,11 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
     return { ...meta, columns: cols(["fixed", "not_fixed", "unknown", "first_time_fix_pct"]), rows: shaped, total: 1, page: 1, pageSize: 1 };
   }
   const extra = slug === "msedcl"
-    ? Prisma.sql`(c."saralId" IS NOT NULL OR c."schemeName" IS NOT NULL OR c."callType" = 'SCHEME')`
+    ? Prisma.sql`c.portal = 'MSEDCL'`
+    : slug === "hareda"
+      ? Prisma.sql`c.portal = 'HAREDA'`
+      : slug === "meda"
+        ? Prisma.sql`c.portal = 'MEDA'`
     : slug === "missing-serial"
       ? Prisma.sql`c."serialNorm" IS NULL`
       : Prisma.sql`TRUE`;
@@ -266,7 +272,7 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
     SELECT c."ticketNo", c."bookDate", c."customerName", c.phone, c."stateName", c."districtName", c."callType",
            c."productDetails", c."natureText", c."assignedName", c.status, c."saralId", c."brandName",
-           c."msedclConsumerNo", c."schemeName", c.priority, c."finalStatus"
+           c."msedclConsumerNo", c."msedclRequestNo", c."portalStatus", c.portal, c."portalNo", c."schemeName", c.priority, c."finalStatus"
     FROM "Complaint" c
     WHERE ${where}
     ORDER BY c."bookDate" DESC
@@ -274,7 +280,7 @@ export async function runReport(slug: string, user: SessionUser, scope: string, 
   `;
   return {
     ...meta,
-    columns: cols(["ticketNo", "bookDate", "customerName", "phone", "districtName", "stateName", "callType", "productDetails", "natureText", "assignedName", "status", "saralId", "brandName", "schemeName", "msedclConsumerNo", "priority"]),
+    columns: cols(["ticketNo", "bookDate", "customerName", "phone", "districtName", "stateName", "callType", "productDetails", "natureText", "assignedName", "status", "saralId", "portalNo", "msedclRequestNo", "portalStatus", "brandName", "schemeName", "msedclConsumerNo", "priority"]),
     rows: rows.map((row) => ({
       ...stringify(row),
       status: labelOf(STATUSES, String(row.status)),
@@ -295,7 +301,7 @@ function cols(keys: string[]) {
     product: "Product", pending: "Pending", ticketNo: "Comp. No", bookDate: "Book date", customerName: "Customer",
     phone: "Mobile", districtName: "District", stateName: "State", productDetails: "Product", natureText: "Nature",
     assignedName: "Assigned to", saralId: "Saral Id", brandName: "OEM / brand", schemeName: "Scheme",
-    msedclConsumerNo: "MSEDCL consumer", priority: "Priority",
+    msedclConsumerNo: "MSEDCL consumer", msedclRequestNo: "MSEDCL request no", portalStatus: "Portal status", portalNo: "Portal no", priority: "Priority",
     slice: "Breakdown", label: "Name", repeats: "Repeat failures", rate: "Repeat rate %",
     customer: "Customer", mtbf_days: "MTBF days", intervals: "Intervals",
     technician: "Technician", reopened: "Reopened within 30 days",

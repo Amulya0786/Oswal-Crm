@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BarChart3, ClipboardList, Clock, LayoutDashboard, Library, LineChart, LogOut, PanelLeft, Search, Settings, Shield, Upload, Users } from "lucide-react";
 import type { SessionUser } from "@/lib/types";
@@ -15,7 +15,18 @@ import { showToast } from "@/components/toast";
 const GROUPS = [
   { label: "Desk", items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
   { label: "Service", items: [
-    { href: "/complaints", label: "Complaints", icon: ClipboardList },
+    { href: "/complaints/book", label: "Book complaint", icon: ClipboardList },
+    { href: "/complaints", label: "Complaint list", icon: ClipboardList },
+    { href: "/complaints?advanced=1", label: "Search complaint", icon: ClipboardList },
+    { href: "/complaints?status=OPEN", label: "Open", icon: ClipboardList },
+    { href: "/complaints?status=ASSIGNED", label: "Assigned", icon: ClipboardList },
+    { href: "/complaints?reassigned=1", label: "Re-assigned", icon: ClipboardList },
+    { href: "/complaints?status=PENDING", label: "Pending", icon: ClipboardList },
+    { href: "/complaints?status=CLOSED", label: "Closed", icon: ClipboardList },
+    { href: "/complaints?status=HAPPY_CALLING", label: "Happy calling done", icon: ClipboardList },
+    { href: "/complaints?status=CANCELLED", label: "Cancelled", icon: ClipboardList },
+    { href: "/complaints?status=CLOSED_UNVERIFIED", label: "Closed unverified", icon: ClipboardList },
+    { href: "/complaints?status=PENDING_CLOSURE", label: "Pending closure approval", icon: ClipboardList },
     { href: "/assign", label: "To assign", icon: ClipboardList },
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/expenses", label: "Expenses", icon: ClipboardList },
@@ -40,13 +51,14 @@ const GROUPS = [
 ];
 
 const CRUMB: Record<string, string> = {
-  complaints: "Complaints", book: "Book", masters: "Masters", reports: "Reports", analytics: "Analytics",
+  complaints: "Complaints", book: "Book", counters: "Counters", masters: "Masters", reports: "Reports", analytics: "Analytics",
   security: "Security", import: "Import", settings: "Settings", profile: "Profile",
   exports: "Exports", customers: "Customers", assets: "Asset", whatsapp: "WhatsApp", scorecards: "Technician score", daily: "Daily summary", field: "Technician", assist: "Suggestions", performance: "Technician score", feedback: "Ratings", connect: "Power BI",
 };
 
 export function Shell({ user, scope, version, children }: { user: SessionUser; scope: string; version: number; children: React.ReactNode }) {
   const path = usePathname();
+  const params = useSearchParams();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -68,6 +80,7 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
       if (item.href === "/performance" || item.href === "/reports/daily") return user.caps.analytics;
       if (item.href === "/masters") return user.caps.masterView;
       if (item.href === "/assign") return user.caps.assign;
+      if (item.href === "/complaints/book") return user.caps.book;
       if (item.href === "/expenses" || item.href === "/contracts" || item.href === "/leave") return false;
       if (item.href === "/engineers") return user.role !== "CALL_CENTRE" && user.role !== "OEM_PARTNER";
       if (item.href === "/health") return user.caps.security;
@@ -186,6 +199,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             ))}
             {user.caps.allCompanies && <button className={scope === "all" ? "active" : ""} onClick={() => choose("all")}>All</button>}
           </div>
+          <Link className="btn line" href="/counters/state">State counter</Link>
+          <Link className="btn line" href="/counters/brand">Brand counter</Link>
           <button className="search-btn" aria-label="Search" onClick={() => setOpen(true)}><Search size={16} /> {DESK_LABEL[lang].Search ?? "Search"} <kbd>Ctrl K</kbd></button>
           <button type="button" className="icon-btn" aria-label="Language" onClick={() => {
             const next = lang === "hi" ? "en" : "hi";
@@ -223,11 +238,19 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
               <div className="side-group">{DESK_LABEL[lang][group.label] ?? group.label}</div>
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const matchesPath = item.href === "/"
-                  ? path === "/"
-                  : item.href === "/reports"
-                    ? path === "/reports" || (path.startsWith("/reports/") && !path.startsWith("/reports/daily"))
-                    : path.startsWith(item.href);
+                const url = new URL(item.href, "http://desk");
+                const matchesPath = pendingHref
+                  ? false
+                  : url.pathname === "/"
+                    ? path === "/"
+                    : url.pathname === "/complaints"
+                      ? path === "/complaints"
+                        && (params.get("status") ?? "") === (url.searchParams.get("status") ?? "")
+                        && (params.get("reassigned") ?? "") === (url.searchParams.get("reassigned") ?? "")
+                        && (params.get("advanced") ?? "") === (url.searchParams.get("advanced") ?? "")
+                      : url.pathname === "/reports"
+                        ? path === "/reports" || (path.startsWith("/reports/") && !path.startsWith("/reports/daily") && !path.startsWith("/reports/ageing"))
+                        : path === url.pathname || path.startsWith(`${url.pathname}/`);
                 const active = pendingHref ? item.href === pendingHref : matchesPath;
                 const label = DESK_LABEL[lang][item.label] ?? item.label;
                 return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`side-link ${active ? "active" : ""}`} onClick={() => { setPendingHref(item.href); setNavOpen(false); }}><Icon size={16} /><span>{label}</span></Link>;

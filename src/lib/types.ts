@@ -70,6 +70,11 @@ export type ComplaintFilters = {
   districtId?: string;
   engineerId?: string;
   productId?: string;
+  categoryId?: string;
+  natureId?: string;
+  dateOn?: string;
+  hold?: string;
+  reassigned?: string;
   brandId?: string;
   priority?: string;
   source?: string;

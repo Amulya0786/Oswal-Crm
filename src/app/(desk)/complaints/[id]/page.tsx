@@ -6,6 +6,8 @@ import { prisma } from "@/server/db";
 import { DetailActions } from "@/components/detail-actions";
 import { labelOf, CALL_TYPES, STATUSES, PRIORITIES, statusClass } from "@/lib/labels";
 import { isPortalTicket, portalLabel } from "@/lib/portal";
+import { placeImageSlots } from "@/lib/image-slots";
+import { ImageGrid } from "@/components/image-grid";
 import { ageDays, formatDay, formatWhen } from "@/lib/time";
 import { coverStatus } from "@/lib/history";
 import { VoiceBox } from "@/components/voice-box";
@@ -79,9 +81,14 @@ export default async function ComplaintDetail({ params, searchParams }: { params
             <li key={`${item.at}-${index}`}><b>{item.type}</b> · {formatWhen(item.at)}<div>{item.message}</div>{item.actorName && <div className="muted">{item.actorName}</div>}</li>
           ))}
         </ul>
-        {complaint.attachments.length > 0 && (
-          <div>{complaint.attachments.map((file) => <a key={file.id} href={`/api/desk/attachments/${file.id}`}>{file.fileName}</a>)}</div>
-        )}
+        <ImageGrid
+          complaintId={complaint.id}
+          canUpload={user.caps.note || user.caps.close || user.caps.book}
+          files={placeImageSlots([
+            ...complaint.media.map((file) => ({ id: file.id, kind: file.kind, name: file.note || file.kind, source: "media" as const })),
+            ...complaint.attachments.map((file) => ({ id: file.id, kind: "FILE", name: file.fileName, source: "attachment" as const })),
+          ])}
+        />
       </section>
       <section className="panel" style={{ marginTop: 12 }}>
         <div className="section-head">
