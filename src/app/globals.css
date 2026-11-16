@@ -33,8 +33,8 @@
   --shadow: 0 1px 2px rgba(20, 33, 27, 0.04), 0 10px 28px rgba(20, 33, 27, 0.06);
   --glow: 0 8px 20px rgba(2, 80, 47, 0.16);
   --radius: 12px;
-  --font: var(--font-inter), var(--font-noto), "Noto Sans Devanagari", sans-serif;
-  --display: var(--font-inter), var(--font-noto), sans-serif;
+  --font: var(--font-poppins), var(--font-noto), "Noto Sans Devanagari", sans-serif;
+  --display: var(--font-poppins), var(--font-noto), sans-serif;
   --mono: var(--font-mono), "DM Mono", ui-monospace, monospace;
   color: var(--ink);
   background: var(--paper);
@@ -396,5 +396,72 @@ button:active, .btn:active, .chip:active, .side-link:active, .icon-btn:active, .
   filter: brightness(0.92);
 }
 .desk-loading { display: grid; gap: 10px; color: var(--muted); padding: 8px 0 16px; }
-.desk-loading-bar { display: block; height: 3px; width: 42%; max-width: 220px; border-radius: 99px; background: #02502f; animation: desk-load 0.9s ease-in-out infinite; }
+.desk-loading-bar { display: block; height: 3px; width: 42%; max-width: 220px; border-radius: 99px; background: #C00000; animation: desk-load 0.9s ease-in-out infinite; }
+
+/* Smartlogics desk: light page, dark grid headers, red counter buttons, compact menu. */
+:root, [data-theme="brand"] {
+  --paper: #F4F6FA;
+  --paper-2: #eef1f6;
+  --side: #ffffff;
+  --ink: #212529;
+}
+:root body, [data-theme="brand"] body, :root .app, [data-theme="brand"] .app { background: #F4F6FA; }
+[data-theme="dark"] body, [data-theme="dark"] .app { background: #0b0f0e; }
+.workspace { grid-template-columns: 230px minmax(0, 1fr); }
+.app.collapsed .workspace { grid-template-columns: 76px minmax(0, 1fr); }
+@media (max-width: 900px) {
+  .workspace, .app.collapsed .workspace { grid-template-columns: 1fr; }
+}
+.sidebar {
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+  padding: 8px 0 24px;
+}
+.side-brand { padding: 4px 12px 10px; }
+.side-group { margin: 14px 14px 4px; font-size: 11px; letter-spacing: 0.06em; color: #6c757d; }
+.side-link {
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #212529;
+  border-left: 3px solid transparent;
+}
+.side-link:hover { background: #F4F6FA; color: #212529; }
+.side-link.active, .side-link.active:hover {
+  background: #F4F6FA;
+  color: #C00000;
+  border-left-color: #C00000;
+  font-weight: 600;
+}
+.topband .counter-btn {
+  background: #C00000;
+  color: #fff;
+  border: 0;
+  min-height: 30px;
+  padding: 4px 12px;
+  font-weight: 600;
+}
+.topband .counter-btn:hover { background: #a30000; }
+.table-wrap { border-radius: 2px; background: #fff; }
+table { font-size: 12px; }
+th, td { padding: 4px 8px; font-size: 12px; vertical-align: middle; }
+table th, .table-dense th {
+  background: #212529;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+table th a { color: #fff; }
+.table-dense th, .table-dense td { height: 28px; max-height: 32px; padding: 2px 6px; font-size: 12px; }
+[data-theme="dark"] .sidebar { background: #111827; }
+[data-theme="dark"] .side-link { color: #f9fafb; }
+[data-theme="dark"] .side-link.active, [data-theme="dark"] .side-link.active:hover {
+  background: #1f2937;
+  color: #ffb4b4;
+  border-left-color: #C00000;
+}
 @keyframes desk-load { 50% { width: 18%; opacity: 0.55; } }

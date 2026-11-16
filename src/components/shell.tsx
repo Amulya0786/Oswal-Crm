@@ -200,8 +200,8 @@ export function Shell({ user, scope, version, children }: { user: SessionUser; s
             ))}
             {user.caps.allCompanies && <button className={scope === "all" ? "active" : ""} onClick={() => choose("all")}>All</button>}
           </div>
-          <Link className="btn line" href="/counters/state">State counter</Link>
-          <Link className="btn line" href="/counters/brand">Brand counter</Link>
+          <Link className="btn counter-btn" href="/counters/state">State counter</Link>
+          <Link className="btn counter-btn" href="/counters/brand">Brand counter</Link>
           <button className="search-btn" aria-label="Search" onClick={() => setOpen(true)}><Search size={16} /> {DESK_LABEL[lang].Search ?? "Search"} <kbd>Ctrl K</kbd></button>
           <button type="button" className="icon-btn" aria-label="Language" onClick={() => {
             const next = lang === "hi" ? "en" : "hi";
