@@ -4,6 +4,9 @@ import { HttpError } from "./http";
 import { updateComplaint } from "./complaints";
 import { notifyWhatsAppEvent } from "./whatsapp";
 import { DEFAULT_PROOF, validateProof } from "@/lib/phase3";
+import { decidePortalClosure } from "@/lib/portal-closure";
+import { isPortalTicket } from "@/lib/portal";
+import { whatsAppMode } from "./whatsapp";
 import type { SessionUser } from "@/lib/types";
 import { kolkataYmd } from "@/lib/time";
 
@@ -73,7 +76,15 @@ export async function issueCloseOtp(user: SessionUser, complaintId: string) {
     complaintId: complaint.id,
     vars: { ticketNo: complaint.ticketNo, otp: code, customerName: complaint.customerName },
   });
-  return { ok: true, devCode: process.env.SHOW_DEV_OTP === "1" ? code : undefined };
+  const channel = whatsAppMode();
+  const delivered = channel !== "log";
+  return {
+    ok: true,
+    delivered,
+    channel,
+    reason: delivered ? undefined : "WhatsApp is not configured, and there is no SMS provider. The OTP is stored for verification and was not sent to the farmer.",
+    devCode: process.env.SHOW_DEV_OTP === "1" ? code : undefined,
+  };
 }
 
 function whatsAppConfigured() {
@@ -109,7 +120,7 @@ export async function fieldClose(user: SessionUser, complaintId: string, input: 
     customerLat: complaint.lat,
     customerLng: complaint.lng,
   }, policy);
-  if (!proof.ok) throw new HttpError(400, `Closing needs ${proof.missing.join(", ")}`);
+  let otpVerified = false;
   if (input.otp) {
     const challenge = await prisma.otpChallenge.findFirst({
       where: { phone: complaint.phone, ticketNo: complaint.ticketNo, purpose: "CLOSE", used: false, expiresAt: { gt: new Date() } },
@@ -117,7 +128,19 @@ export async function fieldClose(user: SessionUser, complaintId: string, input: 
     });
     if (!challenge || challenge.code !== String(input.otp)) throw new HttpError(401, "Customer OTP is wrong or expired");
     await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { used: true } });
+    otpVerified = true;
   }
+  const portalDecision = decidePortalClosure({
+    portal: complaint.portal,
+    channel: "field",
+    photos,
+    otpVerified,
+    lat: input.lat,
+    lng: input.lng,
+    siteLat: complaint.lat,
+    siteLng: complaint.lng,
+  });
+  if (!isPortalTicket(complaint.portal) && !proof.ok) throw new HttpError(400, `Closing needs ${proof.missing.join(", ")}`);
   if (input.nameplate) await saveMedia(complaintId, "NAMEPLATE", input.nameplate);
   await saveMedia(complaintId, "BEFORE", input.before);
   await saveMedia(complaintId, "AFTER", input.after);
@@ -131,14 +154,24 @@ export async function fieldClose(user: SessionUser, complaintId: string, input: 
   }
   const closed = await updateComplaint(user, complaint.companyId, complaintId, {
     action: "close",
-    problemText: input.problemText,
-    solutionText: input.solutionText,
+    problemText: input.problemText || (portalDecision.kind === "pending" ? "Site closure requested" : input.problemText),
+    solutionText: input.solutionText || (portalDecision.kind === "pending" ? "Waiting for proof or approval" : input.solutionText),
     serialNo: input.serialNo,
     nameplateCaptured: Boolean(input.nameplate),
+    fieldProof: portalDecision.kind === "close",
+    pendingReason: portalDecision.kind === "pending" ? portalDecision.reason : null,
+    gpsSiteUnknown: portalDecision.kind === "close" ? portalDecision.siteUnpinned : false,
   });
+  const distanceKm = portalDecision.kind === "close" && portalDecision.distanceM != null ? Math.round(portalDecision.distanceM / 100) / 10 : proof.distanceKm;
   await prisma.complaint.update({
     where: { id: complaintId },
-    data: { closeLat: input.lat ?? null, closeLng: input.lng ?? null, closeDistanceKm: proof.distanceKm, gpsFar: proof.gpsFar },
+    data: {
+      closeLat: input.lat ?? null,
+      closeLng: input.lng ?? null,
+      closeDistanceKm: distanceKm,
+      gpsFar: portalDecision.kind === "close" ? false : proof.gpsFar,
+      gpsSiteUnknown: portalDecision.kind === "close" && portalDecision.siteUnpinned,
+    },
   });
   if (proof.gpsFar) {
     await prisma.complaintEvent.create({

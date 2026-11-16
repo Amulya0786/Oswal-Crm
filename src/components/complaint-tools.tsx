@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ListRow } from "@/server/query";
 import { labelOf, CALL_TYPES, STATUSES, statusClass } from "@/lib/labels";
+import { portalLabel } from "@/lib/portal";
 import { NameReviewChip } from "@/components/name-review";
 import { formatDay } from "@/lib/time";
 
@@ -102,6 +103,7 @@ export function ComplaintTable({
             <col className="col-product" />
             <col className="col-assigned" />
             <col className="col-status" />
+            <col className="col-portal" />
             <col className="col-age" />
             <col className="col-action" />
           </colgroup>
@@ -117,13 +119,14 @@ export function ComplaintTable({
               <th className="col-product">Product</th>
               <th className="col-assigned">Assigned</th>
               <th className="col-status">Status</th>
+              <th className="col-portal">Portal</th>
               <th className="col-age">Age</th>
               <th className="col-action"></th>
             </tr>
           </thead>
           <tbody>
             {!rows.length && (
-              <tr><td colSpan={12}><div className="empty-inline"><b>The register is empty</b><span>Book the first call, or clear the filters. Nothing is hidden.</span></div></td></tr>
+              <tr><td colSpan={13}><div className="empty-inline"><b>The register is empty</b><span>Book the first call, or clear the filters. Nothing is hidden.</span></div></td></tr>
             )}
             {rows.map((row) => (
               <tr key={row.id}>
@@ -139,6 +142,7 @@ export function ComplaintTable({
                 <td className="col-product" data-label="Product" title={row.productDetails ?? ""}><span className="ellipsis">{row.productDetails}</span></td>
                 <td className="col-assigned" data-label="Assigned" title={row.assignedName || "Unassigned"}><span className="ellipsis">{row.assignedName || "Unassigned"}</span></td>
                 <td className="col-status" data-label="Status"><span className={statusClass(row.status)}>{labelOf(STATUSES, row.status)}</span></td>
+                <td className="col-portal" data-label="Portal" title={row.portalNo ?? ""}><span className="ellipsis">{portalLabel(row.portal)}{row.portalNo ? ` · ${row.portalNo}` : ""}</span></td>
                 <td className="col-age num" data-label="Age">{row.ageDays}d</td>
                 <td className="col-action" data-label="Action">
                   <details>

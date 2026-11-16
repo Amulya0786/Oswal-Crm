@@ -1,5 +1,7 @@
+type Attachment = { filename: string; content: Buffer; contentType?: string };
+
 /** Sends mail when SMTP_HOST is set. Without it, the caller decides what to tell the user. */
-export async function sendMail(to: string, subject: string, text: string) {
+export async function sendMail(to: string, subject: string, text: string, attachments: Attachment[] = []) {
   const host = process.env.SMTP_HOST;
   if (!host) return { sent: false as const, reason: "SMTP_HOST is not set" };
   const port = Number(process.env.SMTP_PORT || 587);
@@ -14,6 +16,6 @@ export async function sendMail(to: string, subject: string, text: string) {
     return { sent: false as const, reason: "nodemailer is not installed" };
   }
   const transport = nodemailer.createTransport({ host, port, secure: port === 465, auth: user ? { user, pass } : undefined });
-  await transport.sendMail({ from, to, subject, text });
+  await transport.sendMail({ from, to, subject, text, attachments });
   return { sent: true as const };
 }

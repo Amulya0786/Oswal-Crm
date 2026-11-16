@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/toast";
 import { CALL_TYPES, labelOf, PRIORITIES, SOURCES, STATUSES } from "@/lib/labels";
+import { PORTALS } from "@/lib/portal";
 import { SERIAL_UNAVAILABLE_REASONS } from "@/lib/quality";
 import { formatDay } from "@/lib/time";
 
@@ -349,7 +350,9 @@ export function BookForm({ options, scope }: { options: Record<string, any>; sco
           <summary>Scheme, Saral and more</summary>
           <div className="filters">
             <label className="stack">Saral / beneficiary id<input name="saralId" /></label>
-            <label className="stack">Portal<input name="portal" /></label>
+            <label className="stack">Portal<select name="portal" defaultValue=""><option value="">Not set</option>{PORTALS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+            <label className="stack">Portal complaint no<input name="portalNo" /></label>
+            <label className="stack">Portal status<input name="portalStatus" /></label>
             <label className="stack">Sub-type<input name="subType" /></label>
             <label className="stack">Scheme<input name="schemeName" /></label>
             <label className="stack">MSEDCL request no<input name="msedclRequestNo" /></label>

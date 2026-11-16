@@ -91,7 +91,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </section>
           <section className="panel">
             <p className="section-label">Ageing</p>
-            {!!ageing.length && <table><tbody>{["0-1 days", "2-3 days", "4-7 days", "8-15 days", "15+ days"].map((label) => {
+            {!!ageing.length && <table><tbody>{["0–7 days", "8–15 days", "16–30 days", "30+ days"].map((label) => {
               const row = ageing.find((item) => item.label === label);
               return <tr key={label}><td>{label}</td><td className="num">{formatNumber(row?.n ?? 0)}</td></tr>;
             })}</tbody></table>}

@@ -11,6 +11,7 @@ export const STATUSES = [
   { id: "ASSIGNED", label: "Assigned" },
   { id: "REASSIGNED", label: "Re-Assigned" },
   { id: "PENDING", label: "Pending" },
+  { id: "PENDING_CLOSURE", label: "Pending closure approval" },
   { id: "CLOSED", label: "Closed" },
   { id: "CLOSED_UNVERIFIED", label: "Closed - Unverified" },
   { id: "HAPPY_CALLING", label: "Happy Calling Done" },
@@ -58,6 +59,7 @@ export function statusClass(status: string) {
     case "REASSIGNED":
       return "stamp violet";
     case "PENDING":
+    case "PENDING_CLOSURE":
       return "stamp amber";
     case "CLOSED":
       return "stamp good";

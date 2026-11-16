@@ -140,6 +140,7 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
       OR ${col(alias, "phone")} ILIKE ${pattern} ESCAPE '\\'
       ${serialSql}
       OR ${col(alias, "saralId")} ILIKE ${pattern} ESCAPE '\\'
+      OR ${col(alias, "portalNo")} ILIKE ${pattern} ESCAPE '\\'
       OR ${col(alias, "assignedName")} ILIKE ${pattern} ESCAPE '\\'
       OR ${col(alias, "productDetails")} ILIKE ${pattern} ESCAPE '\\'
     )`);
@@ -159,6 +160,7 @@ export function filterSql(filters: ComplaintFilters, ctx: RiskContext, alias?: s
   if (filters.priority) parts.push(Prisma.sql`${col(alias, "priority")} = ${filters.priority}`);
   if (filters.source) parts.push(Prisma.sql`${col(alias, "source")} = ${filters.source}`);
   if (filters.companyId) parts.push(Prisma.sql`${col(alias, "companyId")} = ${filters.companyId}`);
+  if (filters.portal) parts.push(Prisma.sql`${col(alias, "portal")} = ${filters.portal}`);
   if (filters.scheme === "any") {
     parts.push(Prisma.sql`(${col(alias, "callType")} = 'SCHEME' OR ${col(alias, "schemeName")} IS NOT NULL)`);
   } else if (filters.scheme) {
@@ -228,6 +230,7 @@ export function filtersFromRecord(input: Record<string, string | string[] | unde
     priority: one("priority"),
     source: one("source"),
     companyId: one("companyId"),
+    portal: one("portal"),
     scheme: one("scheme"),
     from: one("from"),
     to: one("to"),

@@ -74,6 +74,7 @@ export type ComplaintFilters = {
   priority?: string;
   source?: string;
   companyId?: string;
+  portal?: string;
   scheme?: string;
   from?: string;
   to?: string;

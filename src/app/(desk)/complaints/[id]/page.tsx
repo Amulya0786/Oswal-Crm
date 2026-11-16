@@ -5,6 +5,7 @@ import { getComplaint } from "@/server/complaints";
 import { prisma } from "@/server/db";
 import { DetailActions } from "@/components/detail-actions";
 import { labelOf, CALL_TYPES, STATUSES, PRIORITIES, statusClass } from "@/lib/labels";
+import { isPortalTicket, portalLabel } from "@/lib/portal";
 import { ageDays, formatDay, formatWhen } from "@/lib/time";
 import { coverStatus } from "@/lib/history";
 import { VoiceBox } from "@/components/voice-box";
@@ -53,7 +54,10 @@ export default async function ComplaintDetail({ params, searchParams }: { params
           <p>{complaint.natureText}<br />{complaint.assetId ? <Link href={`/assets/${complaint.assetId}`}>{complaint.productDetails}</Link> : complaint.productDetails}<br />Serial {complaint.serialNo ?? (complaint.serialPending ? `Pending (${complaint.serialUnavailableReason ?? "not captured"})` : "—")} · Brand {complaint.brandName ?? "—"}</p>
           {complaint.asset && <p className="muted">{coverStatus(complaint.asset).warranty} · {coverStatus(complaint.asset).amc}</p>}
           {complaint.missingSerialReason && <p>Closed without a serial: {complaint.missingSerialReason}</p>}
+          <p>Portal {portalLabel(complaint.portal)} · Portal no {complaint.portalNo ?? "—"} · Portal status {complaint.portalStatus ?? "—"}</p>
           <p>Saral {complaint.saralId ?? "—"} · Scheme {complaint.schemeName ?? "—"} · Consumer {complaint.msedclConsumerNo ?? "—"}</p>
+          {complaint.status === "PENDING_CLOSURE" && <p>Waiting for closure approval. {complaint.holdReason}</p>}
+          {complaint.gpsSiteUnknown && <p>GPS was recorded. The site has no saved coordinates.</p>}
           <p>Booked {formatWhen(complaint.bookDate)} by {complaint.callBy}. Schedule {formatWhen(complaint.scheduleDate)}.</p>
           <p>Source {complaint.source}. Final status {complaint.finalStatus ?? "—"}.</p>
         </section>
@@ -64,7 +68,7 @@ export default async function ComplaintDetail({ params, searchParams }: { params
           {complaint.escalatedTo && <p>Escalated to {complaint.escalatedTo.name} ({complaint.escalatedTo.role})</p>}
           {complaint.actualProblem && <p>Problem: {complaint.actualProblem}<br />Solution: {complaint.actualSolution}</p>}
           {complaint.happyRating && <p>Happy calling {complaint.happyRating}/5. {complaint.happyRemarks}</p>}
-          <DetailActions complaint={{ id: complaint.id, status: complaint.status }} engineers={engineers} problems={problems} solutions={solutions} checks={checks} can={user.caps} />
+          <DetailActions complaint={{ id: complaint.id, status: complaint.status, portal: complaint.portal, portalNo: complaint.portalNo, portalStatus: complaint.portalStatus }} engineers={engineers} problems={problems} solutions={solutions} checks={checks} can={user.caps} canApprove={["ADMIN", "STATE_HEAD", "AREA_MANAGER"].includes(user.role)} portalTicket={isPortalTicket(complaint.portal)} />
         </section>
       </div>
       <VoiceBox complaintId={complaint.id} />

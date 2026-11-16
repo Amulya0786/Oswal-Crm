@@ -55,12 +55,28 @@ export function ageDays(bookDate: Date, end: Date = new Date()) {
   return Math.round((utcB - utcA) / 86400000);
 }
 
+/** One ageing standard: 0–7, 8–15, 16–30, and older than 30 days. */
+export const AGE_BUCKETS = [
+  { id: "0-7", label: "0–7 days" },
+  { id: "8-15", label: "8–15 days" },
+  { id: "16-30", label: "16–30 days" },
+  { id: "30+", label: "30+ days" },
+] as const;
+
 export function ageingBounds(bucket: string, now = new Date()): { gte?: Date; lt?: Date } | null {
-  if (bucket === "0-2") return { gte: midnightShift(now, -2), lt: midnightShift(now, 1) };
-  if (bucket === "3-7") return { gte: midnightShift(now, -7), lt: midnightShift(now, -2) };
+  if (bucket === "0-7") return { gte: midnightShift(now, -7), lt: midnightShift(now, 1) };
   if (bucket === "8-15") return { gte: midnightShift(now, -15), lt: midnightShift(now, -7) };
-  if (bucket === "15p") return { lt: midnightShift(now, -15) };
+  if (bucket === "16-30") return { gte: midnightShift(now, -30), lt: midnightShift(now, -15) };
+  if (bucket === "30+" || bucket === "30p") return { lt: midnightShift(now, -30) };
   return null;
+}
+
+export function ageBucket(bookDate: Date, now = new Date()) {
+  const days = ageDays(bookDate, now);
+  if (days <= 7) return "0–7 days";
+  if (days <= 15) return "8–15 days";
+  if (days <= 30) return "16–30 days";
+  return "30+ days";
 }
 
 export function yyMMdd(date: Date) {

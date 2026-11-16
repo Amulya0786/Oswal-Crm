@@ -564,6 +564,9 @@ model Complaint {
   email             String?
   purchaseDate      DateTime?
   portal            String?
+  portalNo          String?
+  portalStatus      String?
+  gpsSiteUnknown    Boolean   @default(false)
   subType           String?
   msedclRequestNo   String?
   msedclStatus      String?
@@ -633,6 +636,8 @@ model Complaint {
   @@index([callType, status])
   @@index([createdById])
   @@index([saralId])
+  @@index([portal])
+  @@index([portalNo])
   @@index([pincode])
   @@index([closedAt])
   @@index([happyAt])

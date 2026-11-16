@@ -64,6 +64,8 @@ type RawRow = {
   priority: string;
   companyId: string;
   saralId: string | null;
+  portal: string | null;
+  portalNo: string | null;
   engineerId: string | null;
   finalStatus: string | null;
   scheduleDate: Date | null;
@@ -96,6 +98,8 @@ export type ListRow = {
   companyId: string;
   companyName: string;
   saralId: string | null;
+  portal: string | null;
+  portalNo: string | null;
   ageDays: number;
   slaBreached: boolean;
   slaRisk: boolean;
@@ -139,6 +143,8 @@ function present(row: RawRow, user: SessionUser, ctx: RiskContext, companies: Ma
     companyId: row.companyId,
     companyName: companies.get(row.companyId) ?? "",
     saralId: row.saralId,
+    portal: row.portal,
+    portalNo: row.portalNo,
     ageDays: ageDays(new Date(row.bookDate), end),
     slaBreached: signal.breached,
     slaRisk: signal.risk,
@@ -159,7 +165,7 @@ function present(row: RawRow, user: SessionUser, ctx: RiskContext, companies: Ma
 const LIST_COLUMNS = Prisma.raw(`
   "id", "ticketNo", "bookDate", "customerName", "phone", "districtName", "stateName",
   "callType", "productDetails", "natureText", "assignedName", "status", "priority",
-  "companyId", "saralId", "engineerId", "finalStatus", "scheduleDate", "brandName",
+  "companyId", "saralId", "portal", "portalNo", "engineerId", "finalStatus", "scheduleDate", "brandName",
   "slaDueAt", "serialNo", "serialPending", "repeatFlag", "repeatReason", "escalationLevel", "source",
   "closedAt", "schemeName"
 `);
@@ -278,10 +284,10 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
   const nextMonth = kolkataNextMonthStart(now);
   const today = kolkataTodayStart(now);
   const tomorrow = midnightShift(now, 1);
-  const age02 = { gte: midnightShift(now, -2), lt: tomorrow };
-  const age37 = { gte: midnightShift(now, -7), lt: midnightShift(now, -2) };
+  const age07 = { gte: midnightShift(now, -7), lt: tomorrow };
   const age815 = { gte: midnightShift(now, -15), lt: midnightShift(now, -7) };
-  const age15 = midnightShift(now, -15);
+  const age1630 = { gte: midnightShift(now, -30), lt: midnightShift(now, -15) };
+  const age30 = midnightShift(now, -30);
   const risk = riskPredicate(ctx);
   const active = Prisma.join(ACTIVE);
   const countsP = prisma.$queryRaw<Record<string, number>[]>`
@@ -304,10 +310,10 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
       COUNT(*) FILTER (WHERE status = 'CLOSED' AND "closedAt" >= ${today} AND "closedAt" < ${tomorrow})::int AS closed_today,
       COUNT(*) FILTER (WHERE status = 'HAPPY_CALLING' AND "happyAt" >= ${today} AND "happyAt" < ${tomorrow})::int AS happy_today,
       COUNT(*) FILTER (WHERE status = 'CANCELLED' AND "cancelledAt" >= ${today} AND "cancelledAt" < ${tomorrow})::int AS cancel_today,
-      COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" >= ${age02.gte} AND "bookDate" < ${age02.lt})::int AS age_0_2,
-      COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" >= ${age37.gte} AND "bookDate" < ${age37.lt})::int AS age_3_7,
+      COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" >= ${age07.gte} AND "bookDate" < ${age07.lt})::int AS age_0_7,
       COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" >= ${age815.gte} AND "bookDate" < ${age815.lt})::int AS age_8_15,
-      COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" < ${age15})::int AS age_15p,
+      COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" >= ${age1630.gte} AND "bookDate" < ${age1630.lt})::int AS age_16_30,
+      COUNT(*) FILTER (WHERE status IN (${active}) AND "bookDate" < ${age30})::int AS age_30p,
       COUNT(*) FILTER (WHERE status IN (${active}) AND "slaDueAt" IS NOT NULL AND "slaDueAt" <= ${now})::int AS breach,
       COUNT(*) FILTER (WHERE ${risk})::int AS risk,
       COUNT(*) FILTER (WHERE "feedbackPending" = true)::int AS feedback_pending,
@@ -402,10 +408,10 @@ async function computeDashboard(user: SessionUser, scope: string, filters: Compl
     { key: "closed_today", group: "today", tone: "good", label: "Closed today", value: num("closed_today"), hint: "Closed since midnight", href: tileHref(drill, { closed: "today" }) },
     { key: "happy_today", group: "today", tone: "teal", label: "Happy call", value: num("happy_today"), hint: "Phone feedback today", href: tileHref(drill, { happy: "today" }) },
     { key: "cancel_today", group: "today", tone: "stone", label: "Cancelled today", value: num("cancel_today"), hint: "Cancelled today", href: tileHref(drill, { cancelled: "today" }) },
-    { key: "age_0_2", group: "age", tone: "good", label: "0–2 days", value: num("age_0_2"), hint: "Fresh complaints", href: tileHref(drill, { ageing: "0-2" }) },
-    { key: "age_3_7", group: "age", tone: "info", label: "3–7 days", value: num("age_3_7"), hint: "Needs a push", href: tileHref(drill, { ageing: "3-7" }) },
-    { key: "age_8_15", group: "age", tone: "amber", label: "8–15 days", value: num("age_8_15"), hint: "Ageing", href: tileHref(drill, { ageing: "8-15" }) },
-    { key: "age_15p", group: "age", tone: "bad", label: "Over 15 days", value: num("age_15p"), hint: "Older than 15 days", href: tileHref(drill, { ageing: "15p" }) },
+    { key: "age_0_7", group: "age", tone: "good", label: "0–7 days", value: num("age_0_7"), hint: "Booked this week", href: tileHref(drill, { ageing: "0-7" }) },
+    { key: "age_8_15", group: "age", tone: "info", label: "8–15 days", value: num("age_8_15"), hint: "Needs a push", href: tileHref(drill, { ageing: "8-15" }) },
+    { key: "age_16_30", group: "age", tone: "amber", label: "16–30 days", value: num("age_16_30"), hint: "Ageing", href: tileHref(drill, { ageing: "16-30" }) },
+    { key: "age_30p", group: "age", tone: "bad", label: "30+ days", value: num("age_30p"), hint: "Older than 30 days", href: tileHref(drill, { ageing: "30+" }) },
     { key: "breach", group: "sla", tone: "bad", label: "SLA breached", value: num("breach"), hint: "Past the promise time", href: tileHref(drill, { breach: "1" }) },
     { key: "risk", group: "sla", tone: "amber", label: "At risk", value: num("risk"), hint: "Likely to breach", href: tileHref(drill, { risk: "1" }) },
     { key: "feedback_score", group: "feedback", tone: "good", label: "WhatsApp rating", value: num("feedback_score"), hint: "Average of 1 to 5", href: "/feedback" },

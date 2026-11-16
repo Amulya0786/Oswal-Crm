@@ -15,6 +15,7 @@ import { assessSla } from "@/lib/sla";
 import { loadRiskContext } from "./query";
 import { displayPhone } from "@/lib/mask";
 import { formatDay } from "@/lib/time";
+import { inferPortal, isPortalTicket, normalizePortal } from "@/lib/portal";
 import type { SessionUser } from "@/lib/types";
 import { parseTicketNo } from "@/lib/ticket";
 import { issueTrackToken } from "@/lib/report-key";
@@ -57,6 +58,8 @@ const bookSchema = z.object({
   email: z.string().max(120).optional().nullable(),
   purchaseDate: z.string().max(20).optional().nullable(),
   portal: z.string().max(80).optional().nullable(),
+  portalNo: z.string().max(80).optional().nullable(),
+  portalStatus: z.string().max(80).optional().nullable(),
   subType: z.string().max(80).optional().nullable(),
   msedclRequestNo: z.string().max(40).optional().nullable(),
   msedclStatus: z.string().max(40).optional().nullable(),
@@ -309,7 +312,21 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
         schemeName: clean(input.schemeName),
         email: clean(input.email),
         purchaseDate: parseDeskDate(clean(input.purchaseDate)),
-        portal: clean(input.portal),
+        portal: normalizePortal(input.portal) ?? inferPortal({
+          schemeName: input.schemeName,
+          stateName: state.name,
+          callType: input.callType,
+          source,
+          requestSubtype: input.requestSubtype,
+          subType: input.subType,
+          saralId: input.saralId,
+          msedclRequestNo: input.msedclRequestNo,
+          msedclStatus: input.msedclStatus,
+          msedclConsumerNo: input.msedclConsumerNo,
+          msedclSubdivision: input.msedclSubdivision,
+        }),
+        portalNo: clean(input.portalNo) ?? clean(input.msedclRequestNo),
+        portalStatus: clean(input.portalStatus) ?? clean(input.msedclStatus),
         subType: clean(input.subType),
         msedclRequestNo: clean(input.msedclRequestNo),
         msedclStatus: clean(input.msedclStatus),
@@ -400,7 +417,7 @@ export async function createComplaint(user: SessionUser | null, inputRaw: unknow
 }
 
 const actionSchema = z.object({
-  action: z.enum(["assign", "hold", "close", "happy", "cancel", "reopen", "schedule", "priority", "note", "payment", "video"]),
+  action: z.enum(["assign", "hold", "close", "happy", "cancel", "reopen", "schedule", "priority", "note", "payment", "video", "portal", "approveClosure", "rejectClosure"]),
   engineerId: z.string().optional().nullable(),
   holdReason: z.string().max(240).optional().nullable(),
   problemId: z.string().optional().nullable(),
@@ -422,6 +439,12 @@ const actionSchema = z.object({
   spareCharge: z.number().optional().nullable(),
   paymentNote: z.string().max(240).optional().nullable(),
   msedclVideoUrl: z.string().max(400).optional().nullable(),
+  portal: z.string().max(80).optional().nullable(),
+  portalNo: z.string().max(80).optional().nullable(),
+  portalStatus: z.string().max(80).optional().nullable(),
+  fieldProof: z.boolean().optional(),
+  pendingReason: z.string().max(400).optional().nullable(),
+  gpsSiteUnknown: z.boolean().optional(),
 });
 
 export async function getComplaint(user: SessionUser, scope: string, idOrTicket: string) {
@@ -618,17 +641,28 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
       data.missingSerialReason = clean(input.missingSerialReason) ?? "Nameplate photographed, number not entered";
     }
     if (input.nameplateCaptured) data.nameplatePhoto = true;
-    data.status = "CLOSED";
-    data.finalStatus = "Closed";
-    data.closedAt = now;
     data.actualProblemId = problem.id;
     data.actualProblem = problem.text;
     data.actualSolutionId = solution.id;
     data.actualSolution = solution.text;
-    data.slaBreached = current.slaDueAt ? current.slaDueAt <= now : false;
-    data.feedbackPending = true;
-    message = `Closed. ${problem.text} / ${solution.text}`;
-    notifyEvent = "CLOSING";
+    const parkPortal = isPortalTicket(current.portal) && (!input.fieldProof || Boolean(clean(input.pendingReason)));
+    if (parkPortal) {
+      const reason = clean(input.pendingReason) ?? "Office close is waiting for site proof: a photo, GPS within 100 m, and the farmer OTP.";
+      data.status = "PENDING_CLOSURE";
+      data.finalStatus = "Pending closure approval";
+      data.holdReason = reason;
+      message = reason;
+      type = "PENDING_CLOSURE";
+    } else {
+      data.status = "CLOSED";
+      data.finalStatus = "Closed";
+      data.closedAt = now;
+      data.slaBreached = current.slaDueAt ? current.slaDueAt <= now : false;
+      data.feedbackPending = true;
+      if (input.gpsSiteUnknown) data.gpsSiteUnknown = true;
+      message = `Closed. ${problem.text} / ${solution.text}`;
+      notifyEvent = "CLOSING";
+    }
   } else if (input.action === "happy") {
     if (!user.caps.happy) throw new HttpError(403, "Happy calling is for the call centre");
     if (current.status !== "CLOSED" && current.status !== "CLOSED_UNVERIFIED" && current.status !== "HAPPY_CALLING") throw new HttpError(400, "Close the complaint before happy calling");
@@ -686,6 +720,38 @@ export async function updateComplaint(user: SessionUser, scope: string, id: stri
     data.msedclVideoUrl = clean(input.msedclVideoUrl);
     message = "MSEDCL video saved";
     type = "NOTE";
+  } else if (input.action === "portal") {
+    if (!user.caps.book && !user.caps.close && !user.caps.note) throw new HttpError(403, "You cannot edit the portal");
+    const portal = normalizePortal(input.portal);
+    if (input.portal && !portal) throw new HttpError(400, "Choose HAREDA, MSEDCL, MEDA, KREDL, PM-KUSUM, or None / Direct");
+    data.portal = portal;
+    data.portalNo = clean(input.portalNo);
+    data.portalStatus = clean(input.portalStatus);
+    message = `Portal set to ${portal ?? "unset"}`;
+    type = "NOTE";
+  } else if (input.action === "approveClosure") {
+    if (!["ADMIN", "STATE_HEAD", "AREA_MANAGER"].includes(user.role)) throw new HttpError(403, "A manager has to approve this closure");
+    if (current.status !== "PENDING_CLOSURE") throw new HttpError(400, "This complaint is not waiting for closure approval");
+    const reason = clean(input.remarks) ?? clean(input.note);
+    if (!reason) throw new HttpError(400, "Add a reason for the approval");
+    data.status = "CLOSED";
+    data.finalStatus = "Closed";
+    data.closedAt = now;
+    data.feedbackPending = true;
+    data.holdReason = null;
+    message = `Closure approved: ${reason}`;
+    type = "CLOSED";
+    notifyEvent = "CLOSING";
+  } else if (input.action === "rejectClosure") {
+    if (!["ADMIN", "STATE_HEAD", "AREA_MANAGER"].includes(user.role)) throw new HttpError(403, "A manager has to reject this closure");
+    if (current.status !== "PENDING_CLOSURE") throw new HttpError(400, "This complaint is not waiting for closure approval");
+    const reason = clean(input.remarks) ?? clean(input.note);
+    if (!reason) throw new HttpError(400, "Add a reason for the rejection");
+    data.status = current.engineerId ? "ASSIGNED" : "OPEN";
+    data.finalStatus = labelOf(STATUSES, String(data.status));
+    data.holdReason = null;
+    message = `Closure rejected: ${reason}`;
+    type = "REOPENED";
   } else if (input.action === "priority") {
     if (!user.caps.assign && user.role !== "ADMIN") throw new HttpError(403, "You cannot change priority");
     if (!input.priority) throw new HttpError(400, "Choose a priority");

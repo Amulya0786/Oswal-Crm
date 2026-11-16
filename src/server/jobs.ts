@@ -6,9 +6,11 @@ import { riskPredicate, ACTIVE } from "./scope";
 import { matchesRule, parseRule, type RuleDefinition } from "@/lib/rules";
 import { notifyComplaint, deliver } from "./notify";
 import { textPdf } from "@/lib/pdf";
-import { kolkataTodayStart, midnightShift, formatDay } from "@/lib/time";
+import { kolkataTodayStart, kolkataYmd, midnightShift, formatDay } from "@/lib/time";
 import { publicOrigin } from "@/lib/origin";
 import { setting } from "./settings";
+import { loadAgeingReport, ageingWorkbook, ageingPdf } from "./ageing-report";
+import { sendMail } from "./mail";
 
 type LadderUser = { id: string; name: string; role: string };
 
@@ -304,11 +306,61 @@ export async function runSummary(now = new Date()) {
   return { lines, file };
 }
 
+export function ageingRecipients() {
+  return (process.env.AGEING_REPORT_TO || process.env.SUMMARY_EMAIL || "")
+    .split(/[,;\s]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.includes("@"));
+}
+
+/** Morning ageing mail. Skips quietly when SMTP or recipients are not set. */
+export async function runAgeingDigest(now = new Date()) {
+  const report = await loadAgeingReport(now);
+  const xlsx = await ageingWorkbook(report);
+  const pdf = ageingPdf(report);
+  const recipients = ageingRecipients();
+  const subject = `Oswal ageing ${now.toISOString().slice(0, 10)}`;
+  const body = [
+    "Daily ageing by state, partner and portal.",
+    `Rows: ${report.matrix.length}. Tickets older than 30 days: ${report.older.length}.`,
+    "The Excel file has the full grid and the 30+ list. The PDF is the short copy.",
+  ].join("\n");
+  if (!process.env.SMTP_HOST) {
+    console.log(`Ageing report not emailed: SMTP_HOST is not set. Recipient count: ${recipients.length}.`);
+    return { sent: false as const, reason: "SMTP_HOST is not set", rows: report.matrix.length, older: report.older.length };
+  }
+  if (!recipients.length) {
+    console.log("Ageing report not emailed: AGEING_REPORT_TO and SUMMARY_EMAIL are empty.");
+    return { sent: false as const, reason: "AGEING_REPORT_TO is empty", rows: report.matrix.length, older: report.older.length };
+  }
+  const attachments = [
+    { filename: "ageing.xlsx", content: xlsx, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    { filename: "ageing.pdf", content: pdf, contentType: "application/pdf" },
+  ];
+  const results = [];
+  for (const to of recipients) {
+    const result = await sendMail(to, subject, body, attachments);
+    results.push({ to, ...result });
+    if (!result.sent) console.log(`Ageing report not emailed to one recipient: ${result.reason}`);
+  }
+  return { sent: results.some((item) => item.sent), results, rows: report.matrix.length, older: report.older.length };
+}
+
 let schedulerStarted = false;
+let ageingSentOn = "";
 export function startScheduler() {
   if (schedulerStarted || process.env.ENABLE_JOBS === "0" || process.env.VITEST) return;
   schedulerStarted = true;
-  setInterval(() => {
+  const tick = () => {
     void runEscalation().catch((error) => console.error("escalation job", error));
-  }, 5 * 60 * 1000);
+    const ymd = kolkataYmd();
+    const key = `${ymd.y}-${ymd.m}-${ymd.d}`;
+    const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+    if (hour === 8 && ageingSentOn !== key) {
+      ageingSentOn = key;
+      void runAgeingDigest().catch((error) => console.error("ageing report", error));
+    }
+  };
+  setInterval(tick, 5 * 60 * 1000);
+  setTimeout(tick, 20 * 1000);
 }

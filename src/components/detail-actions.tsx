@@ -4,14 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { showToast } from "@/components/toast";
 import { compressImage } from "@/lib/compress-image";
+import { PORTALS } from "@/lib/portal";
 
-export function DetailActions({ complaint, engineers, problems, solutions, checks, can }: {
-  complaint: { id: string; status: string };
+export function DetailActions({ complaint, engineers, problems, solutions, checks, can, canApprove, portalTicket }: {
+  complaint: { id: string; status: string; portal: string | null; portalNo: string | null; portalStatus: string | null };
   engineers: { id: string; name: string }[];
   problems: { id: string; name: string }[];
   solutions: { id: string; name: string }[];
   checks: { id: string; name: string }[];
   can: { assign: boolean; hold: boolean; close: boolean; happy: boolean; cancel: boolean; note: boolean; reopen: boolean };
+  canApprove?: boolean;
+  portalTicket?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -38,12 +41,36 @@ export function DetailActions({ complaint, engineers, problems, solutions, check
         {can.cancel && <button className="chip" onClick={() => setPanel("cancel")}>Cancel</button>}
         {can.reopen && <button className="chip" onClick={() => send({ action: "reopen" })}>Reopen</button>}
         {can.note && <button className="chip" onClick={() => setPanel("note")}>Note</button>}
+        <button className="chip" onClick={() => setPanel("portal")}>Portal</button>
+        {canApprove && complaint.status === "PENDING_CLOSURE" && <button className="chip" onClick={() => setPanel("approve")}>Approve closure</button>}
+        {canApprove && complaint.status === "PENDING_CLOSURE" && <button className="chip" onClick={() => setPanel("reject")}>Reject closure</button>}
       </div>
+      {portalTicket && <p className="muted">This is a portal ticket. Closing from the desk sends it for manager approval. The technician must close it with a photo, GPS within 100 m, and the farmer OTP.</p>}
       {error && <div className="banner bad">{error}</div>}
       {panel === "assign" && (
         <form className="filters" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); send({ action: "assign", engineerId: data.get("engineerId") }); }}>
           <select name="engineerId" required><option value="">Technician</option>{engineers.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
           <button className="btn">Assign</button>
+        </form>
+      )}
+      {panel === "portal" && (
+        <form className="filters" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); send({ action: "portal", portal: data.get("portal"), portalNo: data.get("portalNo"), portalStatus: data.get("portalStatus") }); }}>
+          <label className="stack">Portal<select name="portal" defaultValue={complaint.portal ?? ""} aria-label="Portal"><option value="">Not set</option>{PORTALS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <label className="stack">Portal complaint no<input name="portalNo" aria-label="Portal complaint number" defaultValue={complaint.portalNo ?? ""} /></label>
+          <label className="stack">Portal status<input name="portalStatus" aria-label="Portal status" defaultValue={complaint.portalStatus ?? ""} /></label>
+          <button className="btn">Save portal</button>
+        </form>
+      )}
+      {panel === "approve" && (
+        <form className="filters" onSubmit={(event) => { event.preventDefault(); send({ action: "approveClosure", remarks: new FormData(event.currentTarget).get("reason") }); }}>
+          <label className="stack">Approval reason<input name="reason" aria-label="Approval reason" required /></label>
+          <button className="btn">Approve closure</button>
+        </form>
+      )}
+      {panel === "reject" && (
+        <form className="filters" onSubmit={(event) => { event.preventDefault(); send({ action: "rejectClosure", remarks: new FormData(event.currentTarget).get("reason") }); }}>
+          <label className="stack">Rejection reason<input name="reason" aria-label="Rejection reason" required /></label>
+          <button className="btn">Reject closure</button>
         </form>
       )}
       {panel === "hold" && (

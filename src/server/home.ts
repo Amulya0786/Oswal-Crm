@@ -83,11 +83,10 @@ async function computeHome(user: SessionUser, scope: string, stateName?: string 
     prisma.$queryRaw<{ label: string; n: number }[]>`
       SELECT bucket AS label, COUNT(*)::int AS n FROM (
         SELECT CASE
-          WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 2 THEN '0-1 days'
-          WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 4 THEN '2-3 days'
-          WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 8 THEN '4-7 days'
-          WHEN EXTRACT(EPOCH FROM (${now} - c."bookDate")) / 86400 < 16 THEN '8-15 days'
-          ELSE '15+ days'
+        WHEN c."bookDate" >= ${midnightShift(now, -7)} THEN '0–7 days'
+        WHEN c."bookDate" >= ${midnightShift(now, -15)} THEN '8–15 days'
+        WHEN c."bookDate" >= ${midnightShift(now, -30)} THEN '16–30 days'
+        ELSE '30+ days'
         END AS bucket
         FROM "Complaint" c
         WHERE ${where} ${extra}

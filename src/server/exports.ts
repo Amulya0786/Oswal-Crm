@@ -9,7 +9,7 @@ import { loadRiskContext } from "./query";
 import type { ComplaintFilters, SessionUser } from "@/lib/types";
 import { csvCell } from "@/lib/csv";
 import { labelOf, STATUSES, CALL_TYPES } from "@/lib/labels";
-import { formatDay } from "@/lib/time";
+import { ageBucket, formatDay } from "@/lib/time";
 import { localFile, saveObject, spacesConfigured } from "./storage";
 
 const HEADERS = ["Comp. No", "Book date", "Customer", "Mobile", "Address", "Area", "District", "State", "Pincode", "Call type", "Category", "Product", "Nature", "Schedule date", "Assigned to", "Status", "Saral Id", "OEM / brand", "Priority", "Call by", "Final status", "Scheme", "MSEDCL consumer", "Company", "Ageing"];
@@ -68,7 +68,7 @@ export async function runExport(id: string) {
       for (const row of rows) {
         const book = new Date(String(row.bookDate));
         const end = row.closedAt ? new Date(String(row.closedAt)) : new Date();
-        const age = Math.max(0, Math.floor((end.getTime() - book.getTime()) / 86400000));
+        const age = ageBucket(book, end);
         const phone = params.mask ? "masked" : String(row.phone ?? "");
         const line = [
           row.ticketNo, formatDay(book), row.customerName, phone, row.address, row.areaName, row.districtName, row.stateName, row.pincode,

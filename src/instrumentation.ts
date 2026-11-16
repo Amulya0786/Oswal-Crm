@@ -1,4 +1,3 @@
 export async function register() {
-  // Escalation and summary jobs run from /api/cron. They are not started here:
-  // importing the job module into this hook makes the dev server fail to boot.
+  // Jobs are started from the health route. Importing them here pulls Node modules into this bundle.
 }

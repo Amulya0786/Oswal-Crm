@@ -1,6 +1,8 @@
 import { prisma } from "@/server/db";
+import { startScheduler } from "@/server/jobs";
 
 export async function GET() {
+  startScheduler();
   try {
     const rows = await prisma.$queryRaw<{ ok: number }[]>`SELECT 1 AS ok`;
     return Response.json({ ok: rows[0]?.ok === 1, db: true, service: "oswal-service" });
